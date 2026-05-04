@@ -12,7 +12,7 @@ interface CookingModeProps {
 
 const CookingMode: React.FC<CookingModeProps> = ({ recipe, onExit, timer, onUpdateTimer }) => {
   const [currentStep, setCurrentStep] = useState(0);
-  const [isListening, setIsListening] = useState(true);
+
 
   const totalSteps = recipe.instructions.length;
   const progress = Math.round(((currentStep + 1) / totalSteps) * 100);
@@ -82,6 +82,19 @@ const CookingMode: React.FC<CookingModeProps> = ({ recipe, onExit, timer, onUpda
       isRunning: false,
       targetTimestamp: null
     }));
+  };
+
+  const adjustTimer = (deltaSeconds: number) => {
+    onUpdateTimer(prev => {
+      const newSeconds = Math.max(0, prev.remainingSeconds + deltaSeconds);
+      const newOriginal = Math.max(newSeconds, prev.originalDuration);
+      return {
+        ...prev,
+        remainingSeconds: newSeconds,
+        originalDuration: newOriginal,
+        targetTimestamp: prev.isRunning ? Date.now() + newSeconds * 1000 : null
+      };
+    });
   };
 
   const radius = 60; 
@@ -155,10 +168,11 @@ const CookingMode: React.FC<CookingModeProps> = ({ recipe, onExit, timer, onUpda
 
           <div className="flex items-center gap-4">
             <button 
-              onClick={resetTimer}
-              className="size-10 flex items-center justify-center rounded-full bg-white/5 text-white/40 active:bg-white/10"
+              onClick={() => adjustTimer(-60)}
+              className="size-10 flex items-center justify-center rounded-full bg-white/5 text-white/60 active:bg-white/10 active:scale-90 transition-all"
+              title="–1 minute"
             >
-              <span className="material-symbols-outlined text-lg">restart_alt</span>
+              <span className="material-symbols-outlined text-lg">remove</span>
             </button>
             <button 
               onClick={toggleTimer}
@@ -171,9 +185,11 @@ const CookingMode: React.FC<CookingModeProps> = ({ recipe, onExit, timer, onUpda
               </span>
             </button>
             <button 
-              className="size-10 flex items-center justify-center rounded-full bg-white/5 text-white/40 opacity-0 pointer-events-none"
+              onClick={() => adjustTimer(60)}
+              className="size-10 flex items-center justify-center rounded-full bg-white/5 text-white/60 active:bg-white/10 active:scale-90 transition-all"
+              title="+1 minute"
             >
-              <span className="material-symbols-outlined text-lg">pause</span>
+              <span className="material-symbols-outlined text-lg">add</span>
             </button>
           </div>
         </div>
@@ -203,18 +219,6 @@ const CookingMode: React.FC<CookingModeProps> = ({ recipe, onExit, timer, onUpda
       {/* Bottom Section: Fixed Controls */}
       <footer className="shrink-0 bg-[#0f110c] px-6 pb-8 pt-4 border-t border-white/5 z-20">
         <div className="flex flex-col gap-4">
-          <div className="flex justify-center">
-            <button 
-              onClick={() => setIsListening(!isListening)}
-              className="relative size-12 bg-primary rounded-full flex items-center justify-center shadow-2xl active:scale-95 transition-transform"
-            >
-              {isListening && <div className="absolute inset-0 rounded-full bg-primary animate-ping opacity-25"></div>}
-              <span className="material-symbols-outlined text-xl font-bold relative z-10">
-                {isListening ? 'mic' : 'mic_off'}
-              </span>
-            </button>
-          </div>
-
           <div className="grid grid-cols-2 gap-3">
             <button 
               onClick={handleBack}
@@ -233,9 +237,6 @@ const CookingMode: React.FC<CookingModeProps> = ({ recipe, onExit, timer, onUpda
             </button>
           </div>
           
-          <p className="text-[#b6baa1] text-[9px] font-black uppercase tracking-[0.15em] text-center opacity-60">
-            Say "Next" to proceed
-          </p>
         </div>
       </footer>
     </div>

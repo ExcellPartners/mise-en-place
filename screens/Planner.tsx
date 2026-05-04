@@ -446,7 +446,12 @@ const Planner: React.FC<PlannerProps> = ({
               Share Itinerary
             </button>
             <button 
-              onClick={onClearItinerary} 
+              onClick={() => {
+                if (window.confirm('Archive this itinerary and deduct ingredients from pantry?')) {
+                  setShowSummary(false);
+                  onClearItinerary?.();
+                }
+              }} 
               className="w-full bg-red-500/10 border border-red-500/20 text-red-500 font-black py-4 rounded-2xl flex items-center justify-center gap-2 active:bg-red-500/20 transition-all"
             >
               <span className="material-symbols-outlined">delete_sweep</span>

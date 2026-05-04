@@ -261,7 +261,7 @@ const ShoppingList: React.FC<ShoppingListProps> = ({
                       {/* Foreground Content with Swipe Handlers */}
                       <div 
                         style={{ transform: `translateX(${offset}px)` }}
-                        className={`relative flex items-center gap-4 px-4 h-full py-4 justify-between bg-[#000000] z-10 transition-transform duration-75 touch-pan-y ${isChecked ? 'opacity-40' : ''}`}
+                        className={`relative flex items-center gap-4 px-4 h-full py-4 justify-between bg-[#000000] z-10 duration-75 ${isChecked ? 'opacity-40' : ''}`}
                         onTouchStart={handleTouchStart}
                         onTouchMove={(e) => handleTouchMove(e, item.name)}
                         onTouchEnd={(e) => handleTouchEnd(e, item.name)}
