@@ -66,7 +66,7 @@ const Toast: React.FC<{ message: string; isVisible: boolean }> = ({ message, isV
 };
 
 const App: React.FC = () => {
-  const { accessToken, userEmail, userName, spreadsheetId, logout, isAuthenticated, isProfileComplete, completeProfile, login } = useAuth();
+  const { accessToken, userEmail, userName, spreadsheetId, logout, isAuthenticated, isProfileComplete, completeProfile, login, updateName } = useAuth();
   const [viewStack, setViewStack] = useState<View[]>(() => !isAuthenticated ? ['login'] : !isProfileComplete ? ['onboarding'] : ['recipes']);
   
   // Refs for scroll persistence
@@ -374,7 +374,7 @@ const App: React.FC = () => {
     if (spreadsheetId) {
       await updateUserProfile(spreadsheetId, data, accessToken);
     }
-    login(data.name);
+    updateName(data.name);
     setUserAvatar(data.avatarUrl); // Update local avatar state
     setUserBio(data.bio); // Update local bio state
     
@@ -407,13 +407,28 @@ const App: React.FC = () => {
         masters={masterIngredients} 
         mappings={mappings} 
         onBack={handleBack} 
-        onAdd={isFromPantry ? handleAddToPantry : (m) => handleAddToShopping(m, 'recipe')} 
+        onAdd={isFromPantry ? handleAddToPantry : (m) => {
+          handleAddToShopping(m, 'manual');
+          showToast(`${m.name} added to Shopping List`);
+        }}
         onAddNewManual={() => navigateTo('addPantryItem')} 
         mode={isFromPantry ? 'pantry' : 'shopping'}
       />;
     }
 
-    if (currentView === 'addMyItem') return <AddMyItem items={myItemsList} onBack={handleBack} onAdd={(i) => handleAddToShopping(i, 'myItem')} onAddNewManual={() => navigateTo('addNewMyItemEntry')} />;
+    if (currentView === 'addMyItem') return <AddMyItem items={myItemsList} onBack={handleBack} onAdd={(i) => {
+      // MyItems use packages as quantity, buyAs as unit — pass as myItem source so aisle data resolves
+      setRawShoppingEntries(prev => {
+        const key = i.name.toLowerCase();
+        const existing = prev.findIndex(e => e.name.toLowerCase() === key && !e.completed);
+        const next = existing >= 0
+          ? prev.map((e, idx) => idx === existing ? { ...e, amount: e.amount + (i.packages || 1) } : e)
+          : [...prev, { name: i.name, amount: i.packages || 1, unit: i.buyAs || 'unit', source: 'myItem' as const, completed: false }];
+        localStorage.setItem('mise_active_trip_raw', JSON.stringify(next));
+        return next;
+      });
+      showToast(`${i.name} added to Shopping List`);
+    }} onAddNewManual={() => navigateTo('addNewMyItemEntry')} />;
     if (currentView === 'addNewMyItemEntry') return <AddNewMyItemEntry onBack={handleBack} onSave={handleSaveNewMyItem} />;
     
     if (currentView === 'addPantryItem') return <AddPantryItem onBack={handleBack} onSave={handleSavePantryItem} />;

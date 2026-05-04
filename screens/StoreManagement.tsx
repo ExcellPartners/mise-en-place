@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { StoreLocation, StoreMapping } from '../types';
 
 interface StoreManagementProps {
@@ -11,14 +11,26 @@ interface StoreManagementProps {
   mappings: StoreMapping[];
 }
 
+const START_ZONES = ['Produce', 'Meat & Seafood', 'Bakery', 'Dairy', 'Deli', 'Frozen'];
+
 const StoreManagement: React.FC<StoreManagementProps> = ({ 
   onBack, 
   onStoreSelect, 
   selectedStore, 
   onSetDefault,
-  onOpenMap,
   mappings
 }) => {
+  const [startZones, setStartZones] = useState<Record<StoreLocation, string>>(() => {
+    const saved = localStorage.getItem('mise_start_zones');
+    return saved ? JSON.parse(saved) : { Monroe: 'Produce', East: 'Produce', Perinton: 'Produce' };
+  });
+  const [expandedStore, setExpandedStore] = useState<StoreLocation | null>(null);
+
+  const setStartZone = (store: StoreLocation, zone: string) => {
+    const updated = { ...startZones, [store]: zone };
+    setStartZones(updated);
+    localStorage.setItem('mise_start_zones', JSON.stringify(updated));
+  };
   
   const getStoreStats = (storeId: StoreLocation) => {
     const totalMapped = mappings.filter(m => m.aisle[storeId] && m.aisle[storeId].trim() !== '').length;
@@ -60,23 +72,12 @@ const StoreManagement: React.FC<StoreManagementProps> = ({
             return (
               <div 
                 key={store.id}
-                className="bg-white/5 border border-white/10 rounded-2xl p-4 flex flex-col gap-4 group transition-all relative"
+                className="bg-white/5 border border-white/10 rounded-2xl p-4 flex flex-col gap-4 transition-all"
               >
-                {/* Map Shortcut */}
-                <button 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onOpenMap(store.id);
-                  }}
-                  className="absolute top-4 right-4 text-primary p-2 hover:bg-primary/10 rounded-full transition-colors z-10 active:scale-90"
-                >
-                  <span className="material-symbols-outlined">map</span>
-                </button>
-
                 {/* Store Main Info */}
                 <div 
                   onClick={() => onStoreSelect(store.id)}
-                  className="flex items-center justify-between cursor-pointer active:scale-[0.99] transition-transform pr-8"
+                  className="flex items-center justify-between cursor-pointer active:scale-[0.99] transition-transform"
                 >
                   <div className="flex items-center gap-4 flex-1 min-w-0">
                     <div className={`w-14 h-14 rounded-xl flex items-center justify-center shrink-0 border border-white/5 ${
@@ -85,19 +86,46 @@ const StoreManagement: React.FC<StoreManagementProps> = ({
                       <span className="material-symbols-outlined text-3xl">{store.icon}</span>
                     </div>
                     <div className="min-w-0 flex-1">
-                      <h2 className="text-lg font-bold whitespace-normal leading-tight">{store.label}</h2>
+                      <h2 className="text-lg font-bold leading-tight">{store.label}</h2>
                       <div className="flex items-center gap-1.5 mt-1">
                         <span className={`w-2 h-2 rounded-full ${stats.status === 'Optimized' ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
                         <p className={`text-sm font-medium ${stats.status === 'Optimized' ? 'text-emerald-500/90' : 'text-amber-500'}`}>
-                          {stats.status}
+                          {stats.status} · {stats.count}/{mappings.length} aisles mapped
                         </p>
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0 ml-2">
-                    <span className="text-xs text-slate-500 font-medium whitespace-normal text-right leading-tight max-w-[60px]">{stats.count}/{mappings.length} Aisles</span>
-                    <span className="material-symbols-outlined text-slate-600">chevron_right</span>
+                </div>
+
+                {/* Start Zone */}
+                <div className="border-t border-white/5 pt-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-black text-white/40 uppercase tracking-widest">Start Zone</span>
+                    <button
+                      onClick={() => setExpandedStore(expandedStore === store.id ? null : store.id)}
+                      className="text-[#636b2f] text-xs font-black uppercase tracking-widest flex items-center gap-1"
+                    >
+                      {startZones[store.id]}
+                      <span className="material-symbols-outlined text-base">{expandedStore === store.id ? 'expand_less' : 'edit'}</span>
+                    </button>
                   </div>
+                  {expandedStore === store.id && (
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      {START_ZONES.map(zone => (
+                        <button
+                          key={zone}
+                          onClick={() => { setStartZone(store.id, zone); setExpandedStore(null); }}
+                          className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${
+                            startZones[store.id] === zone
+                              ? 'bg-[#636b2f] text-white'
+                              : 'bg-white/5 text-white/50 border border-white/10'
+                          }`}
+                        >
+                          {zone}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Set as Default Toggle */}
@@ -106,7 +134,7 @@ const StoreManagement: React.FC<StoreManagementProps> = ({
                   <button 
                     onClick={() => onSetDefault(store.id)}
                     aria-pressed={selectedStore === store.id}
-                    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${
                       selectedStore === store.id ? 'bg-primary' : 'bg-white/10'
                     }`}
                   >
@@ -120,11 +148,10 @@ const StoreManagement: React.FC<StoreManagementProps> = ({
           })}
         </div>
 
-        {/* Info Banner */}
         <div className="mt-8 p-4 bg-primary/5 rounded-2xl border border-primary/20 flex gap-3">
-          <span className="material-symbols-outlined text-primary text-xl">info</span>
+          <span className="material-symbols-outlined text-primary text-xl shrink-0">info</span>
           <p className="text-xs leading-relaxed text-slate-300">
-            Your default store will be pre-selected for new grocery lists. Optimized layouts can save you up to 15 minutes per trip.
+            Set a <span className="text-white font-bold">Start Zone</span> for each store so your shopping list sorts from where you actually enter. Indoor positioning isn't possible via GPS, but this gives you the same benefit manually.
           </p>
         </div>
       </main>
