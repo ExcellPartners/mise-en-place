@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Recipe, RecipeIngredient } from '../types';
-import { scrapeRecipe } from '../services/geminiScraper';
+
 
 interface AddRecipeManualProps {
   onBack: () => void;
@@ -71,29 +71,61 @@ const AddRecipeManual: React.FC<AddRecipeManualProps> = ({ onBack, onSave, initi
     setGroundingLinks([]);
     
     try {
-      // Use the new geminiScraper service which returns structured data
-      const data = await scrapeRecipe(webUrl);
-      
-      // Map the structured ingredients from Gemini to App's RecipeIngredient format
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 2000,
+          tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+          messages: [{
+            role: 'user',
+            content: `Fetch the recipe from this URL: ${webUrl}
+            
+            Then return ONLY valid JSON (no markdown fences) with this structure:
+            {
+              "title": "string",
+              "description": "string (1 sentence)",
+              "prepTime": number,
+              "cookTime": number,
+              "baseServings": number,
+              "category": "one of: Whole Meal, Main, Side, Appetizer, Breakfast, Dessert, Cocktail",
+              "difficulty": "one of: Low, Medium, High",
+              "chefTip": "string",
+              "ingredients": [{ "name": "Title Case name", "amount": number, "unit": "one of: ${VALID_UNITS.join(', ')}" }],
+              "instructions": ["step 1", "step 2"]
+            }
+            
+            Rules: fractions to decimals, ingredient names Title Case, units from valid list only.`
+          }]
+        })
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error?.message || 'Claude API error');
+      }
+
+      const apiData = await response.json();
+      const text = apiData.content?.find((b: any) => b.type === 'text')?.text || '';
+      const data = JSON.parse(text.replace(/```json|```/g, '').trim());
+
       const parsedIngredients: RecipeIngredient[] = (data.ingredients || []).map((ing: any) => ({
         name: toTitleCase(ing.name || 'Ingredient'),
-        amount: ing.quantity || 0,
-        unit: (ing.unit || 'unit').toLowerCase()
+        amount: typeof ing.amount === 'number' ? ing.amount : parseFloat(ing.amount) || 0,
+        unit: VALID_UNITS.includes((ing.unit || '').toLowerCase()) ? ing.unit.toLowerCase() : 'unit'
       }));
 
       setTitle(data.title || '');
-      // Defaults for fields not returned by the schema
-      setDescription(`Imported from ${new URL(webUrl).hostname}`);
-      setPrepTime('15');
-      setCookTime('30');
-      setServings('4');
-      setCategory('Whole Meal');
-      setDifficulty('Medium');
-      setChefTip('');
-      
+      setDescription(data.description || `Imported from ${new URL(webUrl).hostname}`);
+      setPrepTime(data.prepTime?.toString() || '15');
+      setCookTime(data.cookTime?.toString() || '30');
+      setServings(data.baseServings?.toString() || '4');
+      setCategory(data.category || 'Whole Meal');
+      setDifficulty(data.difficulty || 'Medium');
+      setChefTip(data.chefTip || '');
       setIngredients(parsedIngredients.length ? parsedIngredients : [{ name: '', amount: 0, unit: '' }]);
       setInstructions(data.instructions?.length ? data.instructions : ['']);
-      
       setMethod('Manual');
     } catch (error: any) {
       console.error("Web extraction error:", error);

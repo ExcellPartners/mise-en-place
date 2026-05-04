@@ -187,7 +187,7 @@ export async function saveRecipeToSheet(
       new Date().toISOString() // O (14) - Date
     ];
 
-    await fetch(`${GOOGLE_SHEETS_API_BASE}/${targetId}/values/Recipes!A:O:append?valueInputOption=USER_ENTERED&key=${GOOGLE_API_KEY}`, {
+    await fetch(`${GOOGLE_SHEETS_API_BASE}/${targetId}/values/Recipes!A:O:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS&key=${GOOGLE_API_KEY}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
       body: JSON.stringify({ range: 'Recipes!A:O', majorDimension: 'ROWS', values: [recipeRow] })
@@ -201,7 +201,7 @@ export async function saveRecipeToSheet(
     ]);
 
     if (componentRows.length > 0) {
-      await fetch(`${GOOGLE_SHEETS_API_BASE}/${targetId}/values/Components!A:D:append?valueInputOption=USER_ENTERED&key=${GOOGLE_API_KEY}`, {
+      await fetch(`${GOOGLE_SHEETS_API_BASE}/${targetId}/values/Components!A:D:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS&key=${GOOGLE_API_KEY}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
         body: JSON.stringify({ range: 'Components!A:D', majorDimension: 'ROWS', values: componentRows })
@@ -225,7 +225,7 @@ export async function saveRecipeToSheet(
     });
 
     if (newIngredients.length > 0) {
-      await fetch(`${GOOGLE_SHEETS_API_BASE}/${targetId}/values/Ingredients!A:O:append?valueInputOption=USER_ENTERED&key=${GOOGLE_API_KEY}`, {
+      await fetch(`${GOOGLE_SHEETS_API_BASE}/${targetId}/values/Ingredients!A:O:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS&key=${GOOGLE_API_KEY}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
         body: JSON.stringify({ range: 'Ingredients!A:O', majorDimension: 'ROWS', values: newIngredients })
