@@ -51,15 +51,22 @@ export interface RawShoppingEntry {
 }
 
 const Toast: React.FC<{ message: string; isVisible: boolean }> = ({ message, isVisible }) => {
+  const isError = message.toLowerCase().includes('fail') || message.toLowerCase().includes('error');
+  const isRemove = message.toLowerCase().includes('remov') || message.toLowerCase().includes('clear') || message.toLowerCase().includes('archive');
+  const isWarning = message.toLowerCase().includes('low') || message.toLowerCase().includes('expire');
+  const icon = isError ? 'error' : isWarning ? 'warning' : isRemove ? 'delete_sweep' : 'check_circle';
+  const iconColor = isError ? 'text-red-400' : isWarning ? 'text-amber-400' : isRemove ? 'text-white/50' : 'text-[#636b2f]';
+
   return (
-    <div 
-      className={`fixed top-24 left-1/2 -translate-x-1/2 z-[300] transition-all duration-500 transform pointer-events-none ${
-        isVisible ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0'
+    <div
+      className={`fixed top-0 left-0 right-0 z-[300] flex justify-center pointer-events-none transition-all duration-300 ease-out ${
+        isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-full'
       }`}
+      style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 12px)' }}
     >
-      <div className="bg-[#1a1d14]/95 backdrop-blur-xl border border-white/10 rounded-2xl px-6 py-3 shadow-2xl flex items-center gap-3">
-        <span className="material-symbols-outlined text-[#636b2f] text-xl fill-1">check_circle</span>
-        <p className="text-white text-sm font-bold tracking-wide">{message}</p>
+      <div className="mx-4 flex items-center gap-3 bg-[#2a2c21] border border-[#636b2f]/40 rounded-2xl px-5 py-3.5 shadow-[0_8px_32px_rgba(0,0,0,0.6)] max-w-sm w-full">
+        <span className={`material-symbols-outlined text-xl fill-1 shrink-0 ${iconColor}`}>{icon}</span>
+        <p className="text-white text-sm font-bold tracking-wide flex-1">{message}</p>
       </div>
     </div>
   );
@@ -68,6 +75,51 @@ const Toast: React.FC<{ message: string; isVisible: boolean }> = ({ message, isV
 const App: React.FC = () => {
   const { accessToken, userEmail, userName, spreadsheetId, logout, isAuthenticated, isProfileComplete, completeProfile, login } = useAuth();
   const [viewStack, setViewStack] = useState<View[]>(() => !isAuthenticated ? ['login'] : !isProfileComplete ? ['onboarding'] : ['recipes']);
+  const [navDirection, setNavDirection] = useState<'forward' | 'back' | 'root'>('root');
+  const [screenKey, setScreenKey] = useState(0);
+
+  // Push a dummy history entry so the browser/OS back gesture hits us, not the previous site
+  useEffect(() => {
+    // Push an initial state so we always have something to intercept
+    window.history.pushState({ mise: true }, '');
+
+    const handlePopState = () => {
+      if (viewStack.length > 1) {
+        // App has depth — go back within app and push state again to keep intercepting
+        goBack();
+        window.history.pushState({ mise: true }, '');
+      } else {
+        // At root — re-push so the next swipe doesn't leave the app
+        window.history.pushState({ mise: true }, '');
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [viewStack]);
+
+  const goForward = (view: View) => {
+    setNavDirection('forward');
+    setScreenKey(k => k + 1);
+    setViewStack(prev => [...prev, view]);
+    window.history.pushState({ mise: true }, '');
+  };
+
+  const goBack = () => {
+    setNavDirection('back');
+    setScreenKey(k => k + 1);
+    setViewStack(prev => prev.length <= 1 ? ['recipes'] : prev.slice(0, -1));
+  };
+
+  const goRoot = (view: View) => {
+    setNavDirection('root');
+    setScreenKey(k => k + 1);
+    setViewStack([view]);
+  };
+
+  const handleBack = goBack;
+  const navigateTo = goForward;
+  const resetToView = goRoot;
   
   // Refs for scroll persistence
   const mainRef = useRef<HTMLElement>(null);
@@ -171,20 +223,7 @@ const App: React.FC = () => {
 
   useEffect(() => { if (isAuthenticated && isProfileComplete) triggerSync(); }, [isAuthenticated, isProfileComplete]);
 
-  const handleBack = () => {
-    if (viewStack.length <= 1) setViewStack(['recipes']);
-    else setViewStack(prev => prev.slice(0, -1));
-  };
-
-  const navigateTo = (view: View) => setViewStack(prev => [...prev, view]);
-  
-  const resetToView = (view: View) => {
-    // If explicitly tapping the Home tab, reset scroll to top
-    if (view === 'recipes') {
-      recipesScrollRef.current = 0;
-    }
-    setViewStack([view]);
-  };
+  // Touch swipe handlers — horizontal swipe to go back
 
   // Swipe Handlers
   const onTouchStart = (e: React.TouchEvent) => {
@@ -429,8 +468,6 @@ const App: React.FC = () => {
       onRecipeSelect={(r) => { setSelectedRecipe(r); navigateTo('recipeDetail'); }}
       recentCount={recentCookedCount}
       onPlannerOpen={() => navigateTo('planner')}
-      pantry={pantry}
-      cookedHistory={cookedHistory}
     />;
 
     if (currentView === 'planner') return <Planner 
@@ -563,25 +600,29 @@ const App: React.FC = () => {
     />;
   };
 
+  const transitionClass = navDirection === 'forward' ? 'screen-enter' 
+    : navDirection === 'back' ? 'screen-back' 
+    : 'screen-fade';
+
   return (
     <div 
-      className="min-h-screen bg-[#000000] text-gray-200 flex flex-col overflow-hidden"
+      className="min-h-screen w-full bg-[#000000] text-gray-200 flex flex-col overflow-hidden"
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
     >
       <Toast message={toastState.message} isVisible={toastState.visible} />
       {isLoading && <SplashScreen progress={loadingProgress} />}
-      <main ref={mainRef} className="flex-1 overflow-y-auto no-scrollbar pb-24">{renderView()}</main>
+      <main key={screenKey} ref={mainRef} className={`flex-1 overflow-y-auto no-scrollbar pb-24 ${transitionClass}`}>{renderView()}</main>
 
       {isAuthenticated && isProfileComplete && !['login', 'onboarding', 'cookingMode', 'scanRecipe', 'addRecipeManual'].includes(viewStack[viewStack.length - 1]) && (
         <nav className="fixed bottom-0 left-0 right-0 bg-[#0a0c0a]/95 backdrop-blur-xl border-t border-gray-800 z-[100] nav-safe-pb">
           <div className="flex justify-around items-end px-4 pt-3 max-w-3xl mx-auto">
-          <button onClick={() => resetToView('recipes')} className={`flex flex-col items-center gap-1 transition-colors ${viewStack[0] === 'recipes' && viewStack.length === 1 ? 'text-primary' : 'text-gray-500'}`}><span className="material-symbols-outlined">home</span><span className="text-[10px] font-bold uppercase">Home</span></button>
-          <button onClick={() => resetToView('planner')} className={`flex flex-col items-center gap-1 transition-colors ${viewStack[0] === 'planner' ? 'text-primary' : 'text-gray-500'}`}><span className="material-symbols-outlined">calendar_today</span><span className="text-[10px] font-medium uppercase">Planner</span></button>
-          <div className="relative -top-4"><button onClick={() => setIsAddOverlayOpen(true)} className="w-14 h-14 bg-primary rounded-full shadow-2xl flex items-center justify-center text-white ring-4 ring-[#0a0c0a]"><span className="material-symbols-outlined text-3xl font-bold">add</span></button></div>
-          <button onClick={() => resetToView('shopping')} className={`flex flex-col items-center gap-1 transition-colors ${viewStack[0] === 'shopping' ? 'text-primary' : 'text-gray-500'}`}><span className="material-symbols-outlined">shopping_basket</span><span className="text-[10px] font-medium uppercase">Shopping</span></button>
-          <button onClick={() => resetToView('pantry')} className={`flex flex-col items-center gap-1 transition-colors ${viewStack[0] === 'pantry' ? 'text-primary' : 'text-gray-500'}`}><span className="material-symbols-outlined">inventory_2</span><span className="text-[10px] font-medium uppercase">Pantry</span></button>
+            <button onClick={() => resetToView('recipes')} className={`flex flex-col items-center gap-1 transition-colors ${viewStack[0] === 'recipes' && viewStack.length === 1 ? 'text-primary' : 'text-gray-500'}`}><span className="material-symbols-outlined">home</span><span className="text-[10px] font-bold uppercase">Home</span></button>
+            <button onClick={() => resetToView('planner')} className={`flex flex-col items-center gap-1 transition-colors ${viewStack[0] === 'planner' ? 'text-primary' : 'text-gray-500'}`}><span className="material-symbols-outlined">calendar_today</span><span className="text-[10px] font-medium uppercase">Planner</span></button>
+            <div className="relative -top-4"><button onClick={() => setIsAddOverlayOpen(true)} className="w-14 h-14 bg-primary rounded-full shadow-2xl flex items-center justify-center text-white ring-4 ring-[#0a0c0a]"><span className="material-symbols-outlined text-3xl font-bold">add</span></button></div>
+            <button onClick={() => resetToView('shopping')} className={`flex flex-col items-center gap-1 transition-colors ${viewStack[0] === 'shopping' ? 'text-primary' : 'text-gray-500'}`}><span className="material-symbols-outlined">shopping_basket</span><span className="text-[10px] font-medium uppercase">Shopping</span></button>
+            <button onClick={() => resetToView('pantry')} className={`flex flex-col items-center gap-1 transition-colors ${viewStack[0] === 'pantry' ? 'text-primary' : 'text-gray-500'}`}><span className="material-symbols-outlined">inventory_2</span><span className="text-[10px] font-medium uppercase">Pantry</span></button>
           </div>
         </nav>
       )}

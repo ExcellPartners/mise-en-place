@@ -31,22 +31,13 @@
   </script>
   <style>
     :root {
-      /* Safe area for notch/status bar — works on iPhone, Android, tablet */
-      --safe-top: env(safe-area-inset-top, 0px);
-      --safe-bottom: env(safe-area-inset-bottom, 0px);
-      --safe-left: env(safe-area-inset-left, 0px);
-      --safe-right: env(safe-area-inset-right, 0px);
-      /* Header padding: safe area + comfortable spacing */
-      --safe-top-padding: calc(var(--safe-top) + 1rem);
+      --safe-top-padding: calc(env(safe-area-inset-top, 44px) + 1rem);
     }
-
     html {
       font-size: 16px;
       -webkit-text-size-adjust: 100%;
       text-size-adjust: 100%;
-      height: 100%;
     }
-
     body {
       background-color: #0f110c;
       color: #e2e8f0;
@@ -55,83 +46,52 @@
       padding: 0;
       overflow-x: hidden;
       overscroll-behavior-y: none;
-      height: 100%;
-      /* Extend background into safe areas on notched devices */
-      padding-left: var(--safe-left);
-      padding-right: var(--safe-right);
     }
-
-    #root {
-      height: 100%;
-      min-height: 100dvh; /* dvh = dynamic viewport height, accounts for browser chrome */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
     }
-
-    /* Full-width on all devices — no black bars ever */
-    #root > div {
-      width: 100%;
-      min-height: 100dvh;
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
     }
-
-    /* On large screens (desktop), cap content width and center it like a centered app */
-    @media (min-width: 1024px) {
-      #root > div {
-        max-width: 800px;
-        margin-left: auto;
-        margin-right: auto;
-        box-shadow: 0 0 120px rgba(0,0,0,0.8);
-      }
-      body {
-        background-color: #050705;
-      }
-    }
-
-    .no-scrollbar::-webkit-scrollbar { display: none; }
-    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-
     .material-symbols-outlined {
       font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
     }
     .material-symbols-outlined.fill-1 {
       font-variation-settings: 'FILL' 1;
     }
-
-    /* Safe area header — automatically handles notch on any device */
+    @media print {
+      .no-print { display: none !important; }
+    }
     .header-safe-pt {
       padding-top: var(--safe-top-padding);
     }
 
-    /* Nav bar safe area — extends into home indicator area on iPhone */
-    .nav-safe-pb {
-      padding-bottom: calc(var(--safe-bottom) + 0.75rem);
+    /* ── Safe area variables ── */
+    :root {
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
     }
+    .header-safe-pt { padding-top: calc(var(--safe-top) + 1rem); }
+    .nav-safe-pb    { padding-bottom: calc(var(--safe-bottom) + 0.75rem); }
 
-    /* Screen transitions */
-    @keyframes slideInRight {
-      from { transform: translateX(100%); opacity: 0; }
-      to   { transform: translateX(0);    opacity: 1; }
+    /* ── Screen transitions ── */
+    @keyframes screenEnter {
+      from { opacity: 0; transform: translateX(18px); }
+      to   { opacity: 1; transform: translateX(0); }
     }
-    @keyframes slideInLeft {
-      from { transform: translateX(-30%); opacity: 0; }
-      to   { transform: translateX(0);    opacity: 1; }
+    @keyframes screenBack {
+      from { opacity: 0; transform: translateX(-12px); }
+      to   { opacity: 1; transform: translateX(0); }
     }
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(6px); }
+    @keyframes screenFade {
+      from { opacity: 0; transform: translateY(5px); }
       to   { opacity: 1; transform: translateY(0); }
     }
+    .screen-enter { animation: screenEnter 0.22s cubic-bezier(0.25, 0.46, 0.45, 0.94) both; }
+    .screen-back  { animation: screenBack  0.20s cubic-bezier(0.25, 0.46, 0.45, 0.94) both; }
+    .screen-fade  { animation: screenFade  0.18s ease-out both; }
 
-    .screen-enter {
-      animation: slideInRight 0.28s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
-    }
-    .screen-back {
-      animation: slideInLeft 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
-    }
-    .screen-fade {
-      animation: fadeIn 0.22s ease-out both;
-    }
-
-    @media print {
-      .no-print { display: none !important; }
-    }
   </style>
 <script type="importmap">
 {
