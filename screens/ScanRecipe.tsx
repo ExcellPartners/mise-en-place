@@ -20,6 +20,7 @@ const ScanRecipe: React.FC<ScanRecipeProps> = ({ onClose, onRecipeFound }) => {
   const [hasTorch, setHasTorch] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [isShutterFlash, setIsShutterFlash] = useState(false);
+  const [lastPickedImage, setLastPickedImage] = useState<string | null>(null);
 
   useEffect(() => {
     let stream: MediaStream | null = null;
@@ -203,6 +204,7 @@ const ScanRecipe: React.FC<ScanRecipeProps> = ({ onClose, onRecipeFound }) => {
     const reader = new FileReader();
     reader.onload = async (event) => {
       const result = event.target?.result as string;
+      setLastPickedImage(result); // store thumbnail of picked image
       const base64Data = result.split(',')[1];
       await processImage(base64Data, result);
     };
@@ -299,11 +301,17 @@ const ScanRecipe: React.FC<ScanRecipeProps> = ({ onClose, onRecipeFound }) => {
             onClick={() => galleryInputRef.current?.click()}
             className="flex flex-col items-center gap-1 group cursor-pointer active:scale-95 transition-transform"
           >
-            <div className="w-14 h-14 rounded-xl overflow-hidden border-2 border-white/20 relative shadow-inner">
-              <img className="w-full h-full object-cover" src="https://images.unsplash.com/photo-1541696490-8744a5db0223?auto=format&fit=crop&w=100&h=100" alt="gallery" />
-              <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
-                 <span className="material-symbols-outlined text-white text-xl">photo_library</span>
-              </div>
+            <div className="w-14 h-14 rounded-xl overflow-hidden border-2 border-white/20 relative shadow-inner bg-[#2a2c21]">
+              {lastPickedImage ? (
+                <img className="w-full h-full object-cover" src={lastPickedImage} alt="last picked" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <span className="material-symbols-outlined text-white/40 text-2xl">photo_library</span>
+                </div>
+              )}
+              {!lastPickedImage && (
+                <div className="absolute inset-0 bg-black/10 flex items-center justify-center" />
+              )}
             </div>
             <span className="text-[9px] font-bold font-display uppercase tracking-widest text-white/40">Roll</span>
           </button>

@@ -151,38 +151,49 @@ const Home: React.FC<HomeProps> = ({
         </div>
       </div>
 
-      {/* Recipe count + page info */}
-      <div className="flex items-center justify-between px-5 mb-4">
-        <p className="text-white/30 text-[10px] font-black uppercase tracking-widest">
-          {displayRecipes.length} {displayRecipes.length === 1 ? 'Recipe' : 'Recipes'}
-          {totalPages > 1 && ` • Page ${safePage} of ${totalPages}`}
+      {/* Recipe count + page indicator — single line */}
+      <div className="flex items-center justify-between px-5 mb-4 gap-2">
+        <p className="text-white/30 text-[10px] font-black uppercase tracking-widest whitespace-nowrap shrink-0">
+          {displayRecipes.length} recipes • {safePage}/{totalPages}
         </p>
         {totalPages > 1 && (
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
             <button
               onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
               disabled={safePage === 1}
-              className="size-7 flex items-center justify-center rounded-lg bg-white/5 text-white/40 disabled:opacity-20 active:scale-90 transition-all"
+              className="size-7 flex items-center justify-center rounded-lg bg-white/5 text-white/40 disabled:opacity-20 active:scale-90 transition-all shrink-0"
             >
               <span className="material-symbols-outlined text-base">chevron_left</span>
             </button>
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-              <button
-                key={page}
-                onClick={() => setCurrentPage(page)}
-                className={`size-7 flex items-center justify-center rounded-lg text-[10px] font-black transition-all active:scale-90 ${
-                  page === safePage
-                    ? 'bg-[#636b2f] text-white'
-                    : 'bg-white/5 text-white/40'
-                }`}
-              >
-                {page}
-              </button>
-            ))}
+            {/* Scrollable page dots — shows current ±3 pages */}
+            <div className="flex items-center gap-1 overflow-x-auto no-scrollbar max-w-[180px]">
+              {Array.from({ length: totalPages }, (_, i) => i + 1)
+                .filter(p => Math.abs(p - safePage) <= 3 || p === 1 || p === totalPages)
+                .reduce<(number | 'gap')[]>((acc, p, idx, arr) => {
+                  if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push('gap');
+                  acc.push(p);
+                  return acc;
+                }, [])
+                .map((item, idx) =>
+                  item === 'gap' ? (
+                    <span key={`gap-${idx}`} className="text-white/20 text-[10px] px-0.5">…</span>
+                  ) : (
+                    <button
+                      key={item}
+                      onClick={() => setCurrentPage(item as number)}
+                      className={`size-7 flex items-center justify-center rounded-lg text-[10px] font-black transition-all active:scale-90 shrink-0 ${
+                        item === safePage ? 'bg-[#636b2f] text-white' : 'bg-white/5 text-white/40'
+                      }`}
+                    >
+                      {item}
+                    </button>
+                  )
+                )}
+            </div>
             <button
               onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
               disabled={safePage === totalPages}
-              className="size-7 flex items-center justify-center rounded-lg bg-white/5 text-white/40 disabled:opacity-20 active:scale-90 transition-all"
+              className="size-7 flex items-center justify-center rounded-lg bg-white/5 text-white/40 disabled:opacity-20 active:scale-90 transition-all shrink-0"
             >
               <span className="material-symbols-outlined text-base">chevron_right</span>
             </button>
@@ -255,29 +266,6 @@ const Home: React.FC<HomeProps> = ({
           );
         })}
       </div>
-
-      {/* Bottom pagination for easy thumb access */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-3 px-4 pb-8">
-          <button
-            onClick={() => { setCurrentPage(p => Math.max(1, p - 1)); }}
-            disabled={safePage === 1}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white/5 text-white/50 disabled:opacity-20 active:scale-95 transition-all text-xs font-black uppercase tracking-widest"
-          >
-            <span className="material-symbols-outlined text-base">arrow_back</span>
-            Prev
-          </button>
-          <span className="text-white/30 text-xs font-bold">{safePage} / {totalPages}</span>
-          <button
-            onClick={() => { setCurrentPage(p => Math.min(totalPages, p + 1)); }}
-            disabled={safePage === totalPages}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#636b2f] text-white disabled:opacity-20 active:scale-95 transition-all text-xs font-black uppercase tracking-widest"
-          >
-            Next
-            <span className="material-symbols-outlined text-base">arrow_forward</span>
-          </button>
-        </div>
-      )}
 
     </div>
   );
