@@ -631,13 +631,6 @@ const App: React.FC = () => {
     />;
   };
 
-  return (
-    <div 
-      className="min-h-screen bg-[#000000] text-gray-200 flex flex-col overflow-hidden"
-      onTouchStart={onTouchStart}
-      onTouchMove={onTouchMove}
-      onTouchEnd={onTouchEnd}
-    >
   const isError = toastState.message.toLowerCase().includes('fail') || toastState.message.toLowerCase().includes('error');
   const isRemove = toastState.message.toLowerCase().includes('remov') || toastState.message.toLowerCase().includes('clear') || toastState.message.toLowerCase().includes('archive');
   const isWarning = toastState.message.toLowerCase().includes('low') || toastState.message.toLowerCase().includes('expire');
