@@ -178,14 +178,21 @@ const Collections: React.FC<CollectionsProps> = ({
 
   // Almost There — recipes missing 3 or fewer in-stock ingredients
   const almostThereRecipes = useMemo(() => {
+    if (pantry.length === 0) return [];
+
+    // Use both inStock flag AND quantity > 0 as fallback (handles sheet sync timing)
     const inStockNames = new Set(
       pantry
-        .filter(p => p.inStock && !p.isExpired && (p.quantity ?? 0) > 0)
+        .filter(p => !p.isExpired && ((p.inStock && (p.quantity ?? 0) > 0) || (!p.isExpired && (p.quantity ?? 0) > 0)))
         .map(p => p.name.toLowerCase().trim())
     );
+
     return recipes
+      .filter(r => r.ingredients && r.ingredients.length > 0) // only recipes with loaded ingredients
       .map(recipe => {
-        const missing = recipe.ingredients.filter(ing => !inStockNames.has(ing.name.toLowerCase().trim()));
+        const missing = recipe.ingredients.filter(
+          ing => ing.name && !inStockNames.has(ing.name.toLowerCase().trim())
+        );
         return { recipe, missingCount: missing.length, missingNames: missing.map(i => i.name) };
       })
       .filter(r => r.missingCount > 0 && r.missingCount <= 3)
@@ -399,9 +406,15 @@ const Collections: React.FC<CollectionsProps> = ({
             </div>
             {pantry.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-24 text-center opacity-40 px-8">
-                <span className="material-symbols-outlined text-6xl mb-4">kitchen</span>
-                <p className="font-bold text-xl mb-2">Pantry not synced yet</p>
-                <p className="text-sm">Tap sync to load your pantry data from Google Sheets.</p>
+                <span className="material-symbols-outlined text-6xl mb-4">sync</span>
+                <p className="font-bold text-xl mb-2">Sync needed</p>
+                <p className="text-sm">Pull latest data from Google Sheets to see what you can almost make.</p>
+              </div>
+            ) : recipes.filter(r => r.ingredients?.length > 0).length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-24 text-center opacity-40 px-8">
+                <span className="material-symbols-outlined text-6xl mb-4">receipt_long</span>
+                <p className="font-bold text-xl mb-2">No recipe ingredients loaded</p>
+                <p className="text-sm">Make sure your Components tab is synced correctly in Google Sheets.</p>
               </div>
             ) : almostThereRecipes.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-24 text-center opacity-40 px-8">
