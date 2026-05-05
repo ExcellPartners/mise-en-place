@@ -240,17 +240,15 @@ const App: React.FC = () => {
   useLayoutEffect(() => {
     if (!mainRef.current) return;
     const activeView = viewStack[viewStack.length - 1];
-    
     if (activeView === 'recipes') {
-      // Restore scroll position when returning to recipes
-      mainRef.current.scrollTop = recipesScrollRef.current;
+      // Use RAF + timeout to restore after React has painted the new DOM
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          if (mainRef.current) mainRef.current.scrollTop = recipesScrollRef.current;
+        }, 0);
+      });
     } else {
-      // Ensure other views start at the top
       mainRef.current.scrollTop = 0;
-      // Double check: Force scroll to top on next tick to override any browser restoration behavior on the same DOM element
-      setTimeout(() => {
-        if (mainRef.current) mainRef.current.scrollTop = 0;
-      }, 0);
     }
   }, [viewStack]);
 
@@ -499,6 +497,8 @@ const App: React.FC = () => {
       onRecipeSelect={(r) => { setSelectedRecipe(r); navigateTo('recipeDetail'); }}
       recentCount={recentCookedCount}
       onPlannerOpen={() => navigateTo('planner')}
+      pantry={pantry}
+      cookedHistory={cookedHistory}
     />;
 
     if (currentView === 'planner') return <Planner 

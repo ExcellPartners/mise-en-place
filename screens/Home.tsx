@@ -16,6 +16,8 @@ interface HomeProps {
   recentCount?: number;
 }
 
+const RECIPES_PER_PAGE = 12;
+
 const Home: React.FC<HomeProps> = ({ 
   recipes = [], 
   pinnedIds = [], 
@@ -30,27 +32,40 @@ const Home: React.FC<HomeProps> = ({
 }) => {
   const [activeCategory, setActiveCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
   const categories = ['All', 'Favorites', 'Whole Meal', 'Main', 'Side', 'Appetizer', 'Cocktail', 'Breakfast', 'Dessert'];
 
   const displayRecipes = useMemo(() => {
     return [...recipes]
       .filter(recipe => {
-        // Filter Logic
         let matchesCategory = true;
         if (activeCategory === 'Favorites') {
           matchesCategory = likedIds.includes(recipe.id);
         } else if (activeCategory !== 'All') {
           matchesCategory = recipe.category === activeCategory;
         }
-
         const title = (recipe.title || '').toLowerCase();
         const desc = (recipe.description || '').toLowerCase();
         const query = searchQuery.toLowerCase();
-        
         return matchesCategory && (title.includes(query) || desc.includes(query));
       })
       .sort((a, b) => (a.title || '').localeCompare(b.title || ''));
   }, [recipes, activeCategory, searchQuery, likedIds]);
+
+  // Reset to page 1 when filter/search changes
+  const totalPages = Math.max(1, Math.ceil(displayRecipes.length / RECIPES_PER_PAGE));
+  const safePage = Math.min(currentPage, totalPages);
+  const pagedRecipes = displayRecipes.slice((safePage - 1) * RECIPES_PER_PAGE, safePage * RECIPES_PER_PAGE);
+
+  const handleCategoryChange = (cat: string) => {
+    setActiveCategory(cat);
+    setCurrentPage(1);
+  };
+
+  const handleSearchChange = (q: string) => {
+    setSearchQuery(q);
+    setCurrentPage(1);
+  };
 
   return (
     <div className="w-full min-h-screen bg-[#000000]">
@@ -111,7 +126,7 @@ const Home: React.FC<HomeProps> = ({
           <input 
             type="text"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => handleSearchChange(e.target.value)}
             placeholder="Search your collection..."
             className="w-full h-14 bg-[#1c1d15] border border-gray-800 rounded-2xl pl-12 pr-4 text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-[#636b2f]/50 focus:border-[#636b2f]/50 transition-all font-medium shadow-inner"
           />
@@ -123,7 +138,7 @@ const Home: React.FC<HomeProps> = ({
           {categories.map(cat => (
             <button
               key={cat}
-              onClick={() => setActiveCategory(cat)}
+              onClick={() => handleCategoryChange(cat)}
               className={`flex h-9 shrink-0 items-center justify-center px-4 rounded-xl transition-all duration-300 hover:scale-105 active:scale-95 ${
                 activeCategory === cat 
                   ? 'bg-[#636b2f] text-white shadow-lg shadow-[#636b2f]/20 font-bold scale-105 border border-[#636b2f]' 
@@ -136,8 +151,47 @@ const Home: React.FC<HomeProps> = ({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-5 mb-12 px-4">
-        {displayRecipes.map(recipe => {
+      {/* Recipe count + page info */}
+      <div className="flex items-center justify-between px-5 mb-4">
+        <p className="text-white/30 text-[10px] font-black uppercase tracking-widest">
+          {displayRecipes.length} {displayRecipes.length === 1 ? 'Recipe' : 'Recipes'}
+          {totalPages > 1 && ` • Page ${safePage} of ${totalPages}`}
+        </p>
+        {totalPages > 1 && (
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={safePage === 1}
+              className="size-7 flex items-center justify-center rounded-lg bg-white/5 text-white/40 disabled:opacity-20 active:scale-90 transition-all"
+            >
+              <span className="material-symbols-outlined text-base">chevron_left</span>
+            </button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+              <button
+                key={page}
+                onClick={() => setCurrentPage(page)}
+                className={`size-7 flex items-center justify-center rounded-lg text-[10px] font-black transition-all active:scale-90 ${
+                  page === safePage
+                    ? 'bg-[#636b2f] text-white'
+                    : 'bg-white/5 text-white/40'
+                }`}
+              >
+                {page}
+              </button>
+            ))}
+            <button
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={safePage === totalPages}
+              className="size-7 flex items-center justify-center rounded-lg bg-white/5 text-white/40 disabled:opacity-20 active:scale-90 transition-all"
+            >
+              <span className="material-symbols-outlined text-base">chevron_right</span>
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-5 mb-6 px-4">
+        {pagedRecipes.map(recipe => {
           const isPinned = pinnedIds.includes(recipe.id);
           const finalImageUrl = formatImageUrl(recipe.imageUrl);
           
@@ -177,7 +231,6 @@ const Home: React.FC<HomeProps> = ({
                 
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60"></div>
                 
-                {/* Pin Action Button */}
                 <button 
                   onClick={(e) => {
                     e.stopPropagation();
@@ -202,6 +255,30 @@ const Home: React.FC<HomeProps> = ({
           );
         })}
       </div>
+
+      {/* Bottom pagination for easy thumb access */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-3 px-4 pb-8">
+          <button
+            onClick={() => { setCurrentPage(p => Math.max(1, p - 1)); }}
+            disabled={safePage === 1}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white/5 text-white/50 disabled:opacity-20 active:scale-95 transition-all text-xs font-black uppercase tracking-widest"
+          >
+            <span className="material-symbols-outlined text-base">arrow_back</span>
+            Prev
+          </button>
+          <span className="text-white/30 text-xs font-bold">{safePage} / {totalPages}</span>
+          <button
+            onClick={() => { setCurrentPage(p => Math.min(totalPages, p + 1)); }}
+            disabled={safePage === totalPages}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#636b2f] text-white disabled:opacity-20 active:scale-95 transition-all text-xs font-black uppercase tracking-widest"
+          >
+            Next
+            <span className="material-symbols-outlined text-base">arrow_forward</span>
+          </button>
+        </div>
+      )}
+
     </div>
   );
 };
