@@ -92,8 +92,25 @@ const Pantry: React.FC<PantryProps> = ({ pantry, mappings, onUpdate, onAddNew, o
         </div>
 
         {lowStockCount > 0 && (
-          <div className="px-4 pb-4">
-        {/* Expired/expiring alert banner */}
+          <div className="px-4 pb-3">
+            <button
+              onClick={() => setActiveTab('Low Stock')}
+              className="w-full bg-[#2a2c21] border border-[#3b3e2e] rounded-[1.5rem] p-4 flex items-center gap-4 active:scale-[0.98] transition-all"
+            >
+              <div className="bg-[#636b2f] text-[#0f110c] rounded-full size-10 flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-xl font-black">priority_high</span>
+              </div>
+              <div className="flex-1 text-left">
+                <p className="text-[10px] font-black text-[#636b2f] uppercase tracking-[0.2em] mb-0.5">Low Stock Alerts</p>
+                <p className="text-base font-medium text-white/90 leading-tight">
+                  {lowStockCount} {lowStockCount === 1 ? 'item is' : 'items are'} running low
+                </p>
+              </div>
+              <span className="material-symbols-outlined text-white/20">chevron_right</span>
+            </button>
+          </div>
+        )}
+
         {expiredCount > 0 && (
           <div className="px-4 pb-3">
             <button
