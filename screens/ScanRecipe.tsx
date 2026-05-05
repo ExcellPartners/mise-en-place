@@ -146,16 +146,13 @@ Rules:
 
   const handleCapture = async () => {
     if (!videoRef.current) return;
-    // readyState >= 2 means we have at least current frame data (more reliable than === 4)
-    if (videoRef.current.readyState < 2) {
-      setScanError('Camera not ready yet — wait a moment and try again.');
-      return;
-    }
+    if (isScanning) return; // prevent double-tap
 
     setIsShutterFlash(true);
     setTimeout(() => setIsShutterFlash(false), 150);
 
     const canvas = document.createElement('canvas');
+    // Use video dimensions, fall back to sensible defaults
     canvas.width = videoRef.current.videoWidth || 1280;
     canvas.height = videoRef.current.videoHeight || 720;
     const ctx = canvas.getContext('2d');
@@ -164,6 +161,9 @@ Rules:
     ctx.drawImage(videoRef.current, 0, 0);
     const fullResBase64 = canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
     const previewUrl = canvas.toDataURL('image/jpeg', 0.5);
+    
+    await processImage(fullResBase64, previewUrl);
+  };
     
     await processImage(fullResBase64, previewUrl);
   };
@@ -185,7 +185,7 @@ Rules:
     <div className="fixed inset-0 bg-[#1c1d15] text-white flex flex-col w-full overflow-hidden z-[100]"
       style={{ touchAction: 'none' }}
     >
-      <input type="file" ref={galleryInputRef} onChange={handleFileChange} accept="image/*" capture="environment" className="hidden" />
+      <input type="file" ref={galleryInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
       <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*,application/pdf" className="hidden" />
 
       <div className="relative z-20 flex items-center bg-transparent p-4 pb-2 justify-between header-safe-pt">
@@ -257,8 +257,8 @@ Rules:
         </div>
       </div>
 
-      <div className="relative z-20 bg-[#1c1d15] pb-12 pt-6 border-t border-white/5">
-        <div className="flex justify-center mb-8">
+      <div className="relative z-20 bg-[#1c1d15] border-t border-white/5 nav-safe-pb pt-4">
+        <div className="flex justify-center mb-5">
           <div className="flex bg-white/5 p-1 rounded-full gap-1">
             <button 
               onClick={toggleFlash}
@@ -298,12 +298,11 @@ Rules:
           </button>
 
           {/* Shutter Button */}
-          <div className="relative flex items-center justify-center">
-            <div className={`absolute size-24 border-2 border-white/20 rounded-full ${isScanning ? 'animate-spin border-t-primary' : 'animate-pulse'}`}></div>
+          <div className="relative flex items-center justify-center z-10">
+            <div className={`absolute size-24 border-2 border-white/20 rounded-full ${isScanning ? 'animate-spin border-t-primary' : ''}`}></div>
             <button 
               onClick={handleCapture}
-              disabled={isScanning}
-              className={`size-20 bg-[#626a2f] rounded-full flex items-center justify-center shadow-xl active:scale-90 transition-all ${isScanning ? 'opacity-50' : ''}`}
+              className={`size-20 bg-[#626a2f] rounded-full flex items-center justify-center shadow-xl active:scale-90 transition-all relative z-10 ${isScanning ? 'opacity-50' : ''}`}
             >
               <span className="material-symbols-outlined text-white text-4xl" style={{ fontVariationSettings: "'FILL' 1" }}>
                 {isScanning ? 'sync' : 'photo_camera'}

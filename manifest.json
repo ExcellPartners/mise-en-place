@@ -1,0 +1,27 @@
+{
+  "name": "Mise en Place",
+  "short_name": "Mise en Place",
+  "description": "Precision kitchen ledger and grocery optimizer",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f110c",
+  "theme_color": "#636b2f",
+  "icons": [
+    {
+      "src": "https://res.cloudinary.com/dwf0blscr/image/upload/v1769963656/Mise_en_Place_Icon_-_Green_4x_uv2xxn.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://res.cloudinary.com/dwf0blscr/image/upload/v1769963656/Mise_en_Place_Icon_-_Green_4x_uv2xxn.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["food", "lifestyle", "utilities"],
+  "screenshots": [],
+  "prefer_related_applications": false
+}
