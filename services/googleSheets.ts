@@ -48,14 +48,59 @@ export async function fetchFullAppData(
     const pantry: PantryItem[] = (pantryRows || []).map(row => {
       const name = safeGet(row, 0);
       if (!name) return null;
+
+      // Column map (0-indexed, matches Pantry Stock sheet):
+      // A=ItemName, B=InStock, C=LowStock, D=CurrentQuantity, E=Unit,
+      // F=LastUpdated, G=LastPurchasedDate, H=TTL_Days, I=DaysSinceUpdate,
+      // J=UseSoon_Days, K=ShelfStatus, L=EffectiveQuantity
+      const parseBool = (v: string) => v.toLowerCase() === 'true' || v === '1' || v.toLowerCase() === 'yes';
+      const parseExcelDate = (v: string): string => {
+        // Excel serial dates like 46056 → convert to ISO date string
+        const num = parseFloat(v);
+        if (!isNaN(num) && num > 40000) {
+          const date = new Date((num - 25569) * 86400 * 1000);
+          return date.toISOString().split('T')[0];
+        }
+        return v; // already a string date or empty
+      };
+
+      const effectiveQty = parseFloat(safeGet(row, 11, '0')); // Col L
+      const currentQty   = parseFloat(safeGet(row, 3,  '0')); // Col D
+      const quantity = isNaN(effectiveQty) ? (isNaN(currentQty) ? 0 : currentQty) : effectiveQty;
+
+      const ttlDays         = parseFloat(safeGet(row, 7, '0'));  // Col H
+      const daysSinceUpdate = parseFloat(safeGet(row, 8, '0'));  // Col I
+      const useSoonDays     = parseFloat(safeGet(row, 9, '0'));  // Col J  (days remaining before gone)
+      const shelfStatus     = safeGet(row, 10, '');              // Col K
+      const lastPurchased   = parseExcelDate(safeGet(row, 6, '')); // Col G
+
+      // Expiry logic: item is expired if EffectiveQuantity=0 but CurrentQuantity>0
+      const isExpired = quantity === 0 && currentQty > 0;
+      // Expiring soon: less than 20% of TTL remaining, or UseSoon_Days < 5
+      const isExpiringSoon = !isExpired && ttlDays > 0 && (useSoonDays > 0 && useSoonDays <= 5);
+      // Expiry date: lastPurchased + TTL
+      let expiryDate = '';
+      if (lastPurchased && ttlDays > 0) {
+        const d = new Date(lastPurchased);
+        d.setDate(d.getDate() + ttlDays);
+        expiryDate = d.toISOString().split('T')[0];
+      }
+
       return {
         name,
-        inStock: safeGet(row, 1, 'No').toLowerCase() === 'yes',
-        lowStock: safeGet(row, 2, 'No').toLowerCase() === 'yes',
-        quantity: parseFloat(safeGet(row, 3, '0')),
+        inStock: parseBool(safeGet(row, 1, 'false')),
+        lowStock: parseBool(safeGet(row, 2, 'false')),
+        quantity,
         unit: safeGet(row, 4, 'unit'),
         lastUpdated: safeGet(row, 5),
-        category: 'Other', 
+        lastPurchased,
+        ttlDays: isNaN(ttlDays) ? 0 : ttlDays,
+        daysRemaining: isNaN(useSoonDays) ? null : useSoonDays,
+        shelfStatus,
+        expiryDate,
+        isExpired,
+        isExpiringSoon,
+        category: 'Other',
         icon: 'inventory_2'
       };
     }).filter((item): item is PantryItem => item !== null);
@@ -187,7 +232,7 @@ export async function saveRecipeToSheet(
       new Date().toISOString() // O (14) - Date
     ];
 
-    await fetch(`${GOOGLE_SHEETS_API_BASE}/${targetId}/values/Recipes!A:O:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS&key=${GOOGLE_API_KEY}`, {
+    await fetch(`${GOOGLE_SHEETS_API_BASE}/${targetId}/values/Recipes!A:O:append?valueInputOption=USER_ENTERED&key=${GOOGLE_API_KEY}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
       body: JSON.stringify({ range: 'Recipes!A:O', majorDimension: 'ROWS', values: [recipeRow] })
@@ -201,7 +246,7 @@ export async function saveRecipeToSheet(
     ]);
 
     if (componentRows.length > 0) {
-      await fetch(`${GOOGLE_SHEETS_API_BASE}/${targetId}/values/Components!A:D:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS&key=${GOOGLE_API_KEY}`, {
+      await fetch(`${GOOGLE_SHEETS_API_BASE}/${targetId}/values/Components!A:D:append?valueInputOption=USER_ENTERED&key=${GOOGLE_API_KEY}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
         body: JSON.stringify({ range: 'Components!A:D', majorDimension: 'ROWS', values: componentRows })
@@ -225,7 +270,7 @@ export async function saveRecipeToSheet(
     });
 
     if (newIngredients.length > 0) {
-      await fetch(`${GOOGLE_SHEETS_API_BASE}/${targetId}/values/Ingredients!A:O:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS&key=${GOOGLE_API_KEY}`, {
+      await fetch(`${GOOGLE_SHEETS_API_BASE}/${targetId}/values/Ingredients!A:O:append?valueInputOption=USER_ENTERED&key=${GOOGLE_API_KEY}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
         body: JSON.stringify({ range: 'Ingredients!A:O', majorDimension: 'ROWS', values: newIngredients })
