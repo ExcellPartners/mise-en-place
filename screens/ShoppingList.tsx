@@ -151,7 +151,7 @@ const ShoppingList: React.FC<ShoppingListProps> = ({
   const completedCount = neededItems.filter(i => i.completed).length;
 
   return (
-    <div className="w-full max-w-[480px] mx-auto min-h-screen flex flex-col relative overflow-x-hidden bg-[#000000] text-white font-sans">
+    <div className="w-full min-h-screen flex flex-col relative overflow-x-hidden bg-[#000000] text-white font-sans">
       
       {/* Header */}
       <div className="sticky top-0 z-[60] bg-[#000000]/95 backdrop-blur-xl border-b border-white/5 header-safe-pt">
@@ -261,7 +261,7 @@ const ShoppingList: React.FC<ShoppingListProps> = ({
                       {/* Foreground Content with Swipe Handlers */}
                       <div 
                         style={{ transform: `translateX(${offset}px)` }}
-                        className={`relative flex items-center gap-4 px-4 h-full py-4 justify-between bg-[#000000] z-10 duration-75 ${isChecked ? 'opacity-40' : ''}`}
+                        className={`relative flex items-center gap-4 px-4 h-full py-4 justify-between bg-[#000000] z-10 transition-transform duration-75 touch-pan-y ${isChecked ? 'opacity-40' : ''}`}
                         onTouchStart={handleTouchStart}
                         onTouchMove={(e) => handleTouchMove(e, item.name)}
                         onTouchEnd={(e) => handleTouchEnd(e, item.name)}
@@ -314,7 +314,7 @@ const ShoppingList: React.FC<ShoppingListProps> = ({
         })}
       </div>
 
-      <div className="fixed bottom-[84px] left-1/2 -translate-x-1/2 w-full max-w-[480px] z-[90]">
+      <div className="fixed bottom-[84px] left-0 right-0 w-full z-[90]">
         <div className="px-4 pb-4 pt-4 bg-[#000000]/95 backdrop-blur-xl flex flex-col gap-4 shadow-[0_-20px_50px_rgba(0,0,0,0.5)] border-t border-white/5">
           <button 
             onClick={() => onCheckout?.(neededItems)}

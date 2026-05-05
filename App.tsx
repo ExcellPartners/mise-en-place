@@ -118,6 +118,10 @@ const App: React.FC = () => {
   const [timerState, setTimerState] = useState<GlobalTimerState>({ remainingSeconds: 300, isRunning: false, targetTimestamp: null, originalDuration: 300 });
   const [toastState, setToastState] = useState({ message: '', visible: false });
 
+  // Swipe Gesture State
+  const [touchStart, setTouchStart] = useState<number | null>(null);
+  const [touchEnd, setTouchEnd] = useState<number | null>(null);
+
   useEffect(() => {
     let progress = 0;
     const interval = setInterval(() => {
@@ -167,68 +171,38 @@ const App: React.FC = () => {
 
   useEffect(() => { if (isAuthenticated && isProfileComplete) triggerSync(); }, [isAuthenticated, isProfileComplete]);
 
-  const [swipeDir, setSwipeDir] = useState<'forward' | 'back' | 'root'>('root');
-  const [screenKey, setScreenKey] = useState(0);
-
-  // Override navigateTo and handleBack to track direction for transitions
-  const navigateForward = (view: View) => {
-    setSwipeDir('forward');
-    setScreenKey(k => k + 1);
-    setViewStack(prev => [...prev, view]);
-  };
-
-  const navigateBack = () => {
-    setSwipeDir('back');
-    setScreenKey(k => k + 1);
+  const handleBack = () => {
     if (viewStack.length <= 1) setViewStack(['recipes']);
     else setViewStack(prev => prev.slice(0, -1));
   };
 
-  const resetToRoot = (view: View) => {
-    setSwipeDir('root');
-    setScreenKey(k => k + 1);
-    if (view === 'recipes') recipesScrollRef.current = 0;
+  const navigateTo = (view: View) => setViewStack(prev => [...prev, view]);
+  
+  const resetToView = (view: View) => {
+    // If explicitly tapping the Home tab, reset scroll to top
+    if (view === 'recipes') {
+      recipesScrollRef.current = 0;
+    }
     setViewStack([view]);
   };
 
-  // Replace existing navigation functions
-  const navigateTo = navigateForward;
-  const handleBack = navigateBack;
-  const resetToView = resetToRoot;
-
-  // Swipe-to-go-back — tracks both axes to distinguish scroll from navigation swipe
-  const touchStartX = useRef<number | null>(null);
-  const touchStartY = useRef<number | null>(null);
-  const swipeLocked = useRef<'nav' | 'scroll' | null>(null);
-
+  // Swipe Handlers
   const onTouchStart = (e: React.TouchEvent) => {
-    touchStartX.current = e.targetTouches[0].clientX;
-    touchStartY.current = e.targetTouches[0].clientY;
-    swipeLocked.current = null;
+    setTouchEnd(null);
+    setTouchStart(e.targetTouches[0].clientX);
   };
 
-  const onTouchMove = (e: React.TouchEvent) => {
-    if (!touchStartX.current || !touchStartY.current) return;
-    const dx = e.targetTouches[0].clientX - touchStartX.current;
-    const dy = e.targetTouches[0].clientY - touchStartY.current;
-    // Only lock to nav swipe if clearly more horizontal than vertical
-    if (swipeLocked.current === null) {
-      if (Math.abs(dx) > Math.abs(dy) + 8) swipeLocked.current = 'nav';
-      else if (Math.abs(dy) > Math.abs(dx) + 8) swipeLocked.current = 'scroll';
-    }
-  };
+  const onTouchMove = (e: React.TouchEvent) => setTouchEnd(e.targetTouches[0].clientX);
 
-  const onTouchEnd = (e: React.TouchEvent) => {
-    if (!touchStartX.current || swipeLocked.current !== 'nav') return;
-    const dx = e.changedTouches[0].clientX - touchStartX.current;
-    // Right swipe from left edge (or anywhere if > 80px) goes back
-    const fromLeftEdge = touchStartX.current < 40;
-    if (dx > 60 && (fromLeftEdge || dx > 100) && viewStack.length > 1) {
-      navigateBack();
+  const onTouchEnd = () => {
+    if (!touchStart || !touchEnd) return;
+    const distance = touchStart - touchEnd;
+    // Lower threshold for easier swiping (Standard Back Gesture: Left to Right)
+    const isRightSwipe = distance < -50; 
+    
+    if (isRightSwipe && viewStack.length > 1) {
+      handleBack();
     }
-    touchStartX.current = null;
-    touchStartY.current = null;
-    swipeLocked.current = null;
   };
 
   const showToast = (msg: string) => {
@@ -455,6 +429,8 @@ const App: React.FC = () => {
       onRecipeSelect={(r) => { setSelectedRecipe(r); navigateTo('recipeDetail'); }}
       recentCount={recentCookedCount}
       onPlannerOpen={() => navigateTo('planner')}
+      pantry={pantry}
+      cookedHistory={cookedHistory}
     />;
 
     if (currentView === 'planner') return <Planner 
@@ -587,51 +563,25 @@ const App: React.FC = () => {
     />;
   };
 
-  const transitionClass = swipeDir === 'forward' ? 'screen-enter' 
-    : swipeDir === 'back' ? 'screen-back' 
-    : 'screen-fade';
-
   return (
     <div 
-      className="min-h-screen w-full bg-[#000000] text-gray-200 flex flex-col overflow-hidden"
+      className="min-h-screen bg-[#000000] text-gray-200 flex flex-col overflow-hidden"
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
     >
       <Toast message={toastState.message} isVisible={toastState.visible} />
       {isLoading && <SplashScreen progress={loadingProgress} />}
-      <main 
-        key={screenKey}
-        ref={mainRef} 
-        className={`flex-1 overflow-y-auto no-scrollbar pb-24 ${transitionClass}`}
-      >
-        {renderView()}
-      </main>
+      <main ref={mainRef} className="flex-1 overflow-y-auto no-scrollbar pb-24">{renderView()}</main>
 
       {isAuthenticated && isProfileComplete && !['login', 'onboarding', 'cookingMode', 'scanRecipe', 'addRecipeManual'].includes(viewStack[viewStack.length - 1]) && (
-        <nav className="fixed bottom-0 left-0 right-0 bg-[#0a0c0a]/95 backdrop-blur-xl border-t border-gray-800 px-4 pt-3 flex justify-around items-end z-[100] nav-safe-pb">
-          <div className="w-full max-w-3xl mx-auto flex justify-around items-end">
-            <button onClick={() => resetToView('recipes')} className={`flex flex-col items-center gap-1 transition-colors ${viewStack[0] === 'recipes' && viewStack.length === 1 ? 'text-primary' : 'text-gray-500'}`}>
-              <span className="material-symbols-outlined">home</span>
-              <span className="text-[10px] font-bold uppercase">Home</span>
-            </button>
-            <button onClick={() => resetToView('planner')} className={`flex flex-col items-center gap-1 transition-colors ${viewStack[0] === 'planner' ? 'text-primary' : 'text-gray-500'}`}>
-              <span className="material-symbols-outlined">calendar_today</span>
-              <span className="text-[10px] font-medium uppercase">Planner</span>
-            </button>
-            <div className="relative -top-4">
-              <button onClick={() => setIsAddOverlayOpen(true)} className="w-14 h-14 bg-primary rounded-full shadow-2xl flex items-center justify-center text-white ring-4 ring-[#000000]">
-                <span className="material-symbols-outlined text-3xl font-bold">add</span>
-              </button>
-            </div>
-            <button onClick={() => resetToView('shopping')} className={`flex flex-col items-center gap-1 transition-colors ${viewStack[0] === 'shopping' ? 'text-primary' : 'text-gray-500'}`}>
-              <span className="material-symbols-outlined">shopping_basket</span>
-              <span className="text-[10px] font-medium uppercase">Shopping</span>
-            </button>
-            <button onClick={() => resetToView('pantry')} className={`flex flex-col items-center gap-1 transition-colors ${viewStack[0] === 'pantry' ? 'text-primary' : 'text-gray-500'}`}>
-              <span className="material-symbols-outlined">inventory_2</span>
-              <span className="text-[10px] font-medium uppercase">Pantry</span>
-            </button>
+        <nav className="fixed bottom-0 left-0 right-0 bg-[#0a0c0a]/95 backdrop-blur-xl border-t border-gray-800 z-[100] nav-safe-pb">
+          <div className="flex justify-around items-end px-4 pt-3 max-w-3xl mx-auto">
+          <button onClick={() => resetToView('recipes')} className={`flex flex-col items-center gap-1 transition-colors ${viewStack[0] === 'recipes' && viewStack.length === 1 ? 'text-primary' : 'text-gray-500'}`}><span className="material-symbols-outlined">home</span><span className="text-[10px] font-bold uppercase">Home</span></button>
+          <button onClick={() => resetToView('planner')} className={`flex flex-col items-center gap-1 transition-colors ${viewStack[0] === 'planner' ? 'text-primary' : 'text-gray-500'}`}><span className="material-symbols-outlined">calendar_today</span><span className="text-[10px] font-medium uppercase">Planner</span></button>
+          <div className="relative -top-4"><button onClick={() => setIsAddOverlayOpen(true)} className="w-14 h-14 bg-primary rounded-full shadow-2xl flex items-center justify-center text-white ring-4 ring-[#0a0c0a]"><span className="material-symbols-outlined text-3xl font-bold">add</span></button></div>
+          <button onClick={() => resetToView('shopping')} className={`flex flex-col items-center gap-1 transition-colors ${viewStack[0] === 'shopping' ? 'text-primary' : 'text-gray-500'}`}><span className="material-symbols-outlined">shopping_basket</span><span className="text-[10px] font-medium uppercase">Shopping</span></button>
+          <button onClick={() => resetToView('pantry')} className={`flex flex-col items-center gap-1 transition-colors ${viewStack[0] === 'pantry' ? 'text-primary' : 'text-gray-500'}`}><span className="material-symbols-outlined">inventory_2</span><span className="text-[10px] font-medium uppercase">Pantry</span></button>
           </div>
         </nav>
       )}

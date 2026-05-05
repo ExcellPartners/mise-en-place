@@ -53,7 +53,7 @@ const Home: React.FC<HomeProps> = ({
   }, [recipes, activeCategory, searchQuery, likedIds]);
 
   return (
-    <div className="w-full max-w-[480px] mx-auto min-h-screen bg-[#000000]">
+    <div className="w-full min-h-screen bg-[#000000]">
       {/* Home Header - Logo Left */}
       <header className="flex items-center justify-between mb-2 px-4 header-safe-pt pt-6">
         <div className="flex items-center gap-3">
