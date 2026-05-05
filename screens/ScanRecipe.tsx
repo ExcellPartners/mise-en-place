@@ -164,7 +164,6 @@ Rules:
     ctx.drawImage(videoRef.current, 0, 0);
     const fullResBase64 = canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
     const previewUrl = canvas.toDataURL('image/jpeg', 0.5);
-    const previewUrl = canvas.toDataURL('image/jpeg', 0.5);
     
     await processImage(fullResBase64, previewUrl);
   };
