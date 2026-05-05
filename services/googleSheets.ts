@@ -48,59 +48,14 @@ export async function fetchFullAppData(
     const pantry: PantryItem[] = (pantryRows || []).map(row => {
       const name = safeGet(row, 0);
       if (!name) return null;
-
-      // Column map (0-indexed, matches Pantry Stock sheet):
-      // A=ItemName, B=InStock, C=LowStock, D=CurrentQuantity, E=Unit,
-      // F=LastUpdated, G=LastPurchasedDate, H=TTL_Days, I=DaysSinceUpdate,
-      // J=UseSoon_Days, K=ShelfStatus, L=EffectiveQuantity
-      const parseBool = (v: string) => v.toLowerCase() === 'true' || v === '1' || v.toLowerCase() === 'yes';
-      const parseExcelDate = (v: string): string => {
-        // Excel serial dates like 46056 → convert to ISO date string
-        const num = parseFloat(v);
-        if (!isNaN(num) && num > 40000) {
-          const date = new Date((num - 25569) * 86400 * 1000);
-          return date.toISOString().split('T')[0];
-        }
-        return v; // already a string date or empty
-      };
-
-      const effectiveQty = parseFloat(safeGet(row, 11, '0')); // Col L
-      const currentQty   = parseFloat(safeGet(row, 3,  '0')); // Col D
-      const quantity = isNaN(effectiveQty) ? (isNaN(currentQty) ? 0 : currentQty) : effectiveQty;
-
-      const ttlDays         = parseFloat(safeGet(row, 7, '0'));  // Col H
-      const daysSinceUpdate = parseFloat(safeGet(row, 8, '0'));  // Col I
-      const useSoonDays     = parseFloat(safeGet(row, 9, '0'));  // Col J  (days remaining before gone)
-      const shelfStatus     = safeGet(row, 10, '');              // Col K
-      const lastPurchased   = parseExcelDate(safeGet(row, 6, '')); // Col G
-
-      // Expiry logic: item is expired if EffectiveQuantity=0 but CurrentQuantity>0
-      const isExpired = quantity === 0 && currentQty > 0;
-      // Expiring soon: less than 20% of TTL remaining, or UseSoon_Days < 5
-      const isExpiringSoon = !isExpired && ttlDays > 0 && (useSoonDays > 0 && useSoonDays <= 5);
-      // Expiry date: lastPurchased + TTL
-      let expiryDate = '';
-      if (lastPurchased && ttlDays > 0) {
-        const d = new Date(lastPurchased);
-        d.setDate(d.getDate() + ttlDays);
-        expiryDate = d.toISOString().split('T')[0];
-      }
-
       return {
         name,
-        inStock: parseBool(safeGet(row, 1, 'false')),
-        lowStock: parseBool(safeGet(row, 2, 'false')),
-        quantity,
+        inStock: safeGet(row, 1, 'No').toLowerCase() === 'yes',
+        lowStock: safeGet(row, 2, 'No').toLowerCase() === 'yes',
+        quantity: parseFloat(safeGet(row, 3, '0')),
         unit: safeGet(row, 4, 'unit'),
         lastUpdated: safeGet(row, 5),
-        lastPurchased,
-        ttlDays: isNaN(ttlDays) ? 0 : ttlDays,
-        daysRemaining: isNaN(useSoonDays) ? null : useSoonDays,
-        shelfStatus,
-        expiryDate,
-        isExpired,
-        isExpiringSoon,
-        category: 'Other',
+        category: 'Other', 
         icon: 'inventory_2'
       };
     }).filter((item): item is PantryItem => item !== null);
@@ -232,7 +187,7 @@ export async function saveRecipeToSheet(
       new Date().toISOString() // O (14) - Date
     ];
 
-    await fetch(`${GOOGLE_SHEETS_API_BASE}/${targetId}/values/Recipes!A:O:append?valueInputOption=USER_ENTERED&key=${GOOGLE_API_KEY}`, {
+    await fetch(`${GOOGLE_SHEETS_API_BASE}/${targetId}/values/Recipes!A:O/append?valueInputOption=USER_ENTERED&key=${GOOGLE_API_KEY}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
       body: JSON.stringify({ range: 'Recipes!A:O', majorDimension: 'ROWS', values: [recipeRow] })
@@ -246,7 +201,7 @@ export async function saveRecipeToSheet(
     ]);
 
     if (componentRows.length > 0) {
-      await fetch(`${GOOGLE_SHEETS_API_BASE}/${targetId}/values/Components!A:D:append?valueInputOption=USER_ENTERED&key=${GOOGLE_API_KEY}`, {
+      await fetch(`${GOOGLE_SHEETS_API_BASE}/${targetId}/values/Components!A:D/append?valueInputOption=USER_ENTERED&key=${GOOGLE_API_KEY}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
         body: JSON.stringify({ range: 'Components!A:D', majorDimension: 'ROWS', values: componentRows })
@@ -270,7 +225,7 @@ export async function saveRecipeToSheet(
     });
 
     if (newIngredients.length > 0) {
-      await fetch(`${GOOGLE_SHEETS_API_BASE}/${targetId}/values/Ingredients!A:O:append?valueInputOption=USER_ENTERED&key=${GOOGLE_API_KEY}`, {
+      await fetch(`${GOOGLE_SHEETS_API_BASE}/${targetId}/values/Ingredients!A:O/append?valueInputOption=USER_ENTERED&key=${GOOGLE_API_KEY}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
         body: JSON.stringify({ range: 'Ingredients!A:O', majorDimension: 'ROWS', values: newIngredients })
@@ -363,7 +318,7 @@ export async function restockPantryFromShopping(
         });
       } else {
         const newRow = [item.name, 'Yes', 'No', finalQty, item.unit, today];
-        await fetch(`${GOOGLE_SHEETS_API_BASE}/${targetId}/values/Pantry Stock!A:F:append?valueInputOption=USER_ENTERED&key=${GOOGLE_API_KEY}`, {
+        await fetch(`${GOOGLE_SHEETS_API_BASE}/${targetId}/values/'Pantry Stock'!A:F/append?valueInputOption=USER_ENTERED&key=${GOOGLE_API_KEY}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
           body: JSON.stringify({ range: 'Pantry Stock!A:F', majorDimension: 'ROWS', values: [newRow] })
@@ -445,7 +400,7 @@ export async function addMasterToPantry(
         });
     } else {
         const newRow = [master.name, 'Yes', 'No', master.unitsPerPurchase, master.recipeUnit, today];
-        await fetch(`${GOOGLE_SHEETS_API_BASE}/${targetId}/values/Pantry Stock!A:F:append?valueInputOption=USER_ENTERED&key=${GOOGLE_API_KEY}`, {
+        await fetch(`${GOOGLE_SHEETS_API_BASE}/${targetId}/values/'Pantry Stock'!A:F/append?valueInputOption=USER_ENTERED&key=${GOOGLE_API_KEY}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
           body: JSON.stringify({ range: 'Pantry Stock!A:F', majorDimension: 'ROWS', values: [newRow] })
@@ -477,7 +432,7 @@ export async function addNewMyItemToSheet(
       data.east
     ];
 
-    await fetch(`${GOOGLE_SHEETS_API_BASE}/${targetId}/values/My Items!A:G:append?valueInputOption=USER_ENTERED&key=${GOOGLE_API_KEY}`, {
+    await fetch(`${GOOGLE_SHEETS_API_BASE}/${targetId}/values/'My Items'!A:G/append?valueInputOption=USER_ENTERED&key=${GOOGLE_API_KEY}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
       body: JSON.stringify({ range: 'My Items!A:G', majorDimension: 'ROWS', values: [row] })
@@ -490,8 +445,95 @@ export async function addNewMyItemToSheet(
 }
 
 export async function updateUserProfile(spreadsheetId: string, data: any, accessToken: string | null): Promise<boolean> { return true; }
-export async function addNewPantryItemToSheet(spreadsheetId: string, data: any, accessToken: string | null): Promise<boolean> { return true; }
-export async function updateStoreAisleInSheet(spreadsheetId: string, ingredientName: string, store: any, aisleData: string, accessToken: string | null): Promise<boolean> { return true; }
+export async function addNewPantryItemToSheet(spreadsheetId: string, data: any, accessToken: string | null): Promise<boolean> {
+  const targetId = spreadsheetId || HARDCODED_SPREADSHEET_ID;
+  if (!accessToken || accessToken.startsWith('mock_')) return true;
+  try {
+    // Pantry Stock columns: A=ItemName, B=InStock, C=LowStock, D=CurrentQuantity, E=Unit
+    const row = [data.name, 'FALSE', 'FALSE', data.currentQuantity || 0, data.defaultUnit || 'unit'];
+    await fetch(
+      `${GOOGLE_SHEETS_API_BASE}/${targetId}/values/'Pantry Stock'!A:E/append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ range: "'Pantry Stock'!A:E", majorDimension: 'ROWS', values: [row] })
+      }
+    );
+    // Also add to Ingredients master tab
+    const ingRow = new Array(15).fill('');
+    ingRow[0] = data.name;
+    ingRow[1] = data.category || 'Other';
+    ingRow[2] = data.defaultUnit || 'unit';
+    ingRow[4] = data.monroeAisle || '';
+    ingRow[5] = data.perintonAisle || '';
+    ingRow[6] = data.eastAisle || '';
+    ingRow[9] = data.purchaseUnit || 'Unit';
+    ingRow[11] = data.multiplier || 1;
+    await fetch(
+      `${GOOGLE_SHEETS_API_BASE}/${targetId}/values/Ingredients!A:O/append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ range: 'Ingredients!A:O', majorDimension: 'ROWS', values: [ingRow] })
+      }
+    );
+    return true;
+  } catch (err) {
+    console.error('addNewPantryItemToSheet failed:', err);
+    return false;
+  }
+}
+export async function updateStoreAisleInSheet(
+  spreadsheetId: string,
+  ingredientName: string,
+  store: string,
+  aisleData: string,
+  accessToken: string | null
+): Promise<boolean> {
+  const targetId = spreadsheetId || HARDCODED_SPREADSHEET_ID;
+  if (!accessToken || accessToken.startsWith('mock_')) return true;
+
+  try {
+    // Fetch all rows from Ingredients tab to find the matching row
+    const res = await fetch(
+      `${GOOGLE_SHEETS_API_BASE}/${targetId}/values/Ingredients!A:O?key=${GOOGLE_API_KEY}`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+    const data = await res.json();
+    const rows: string[][] = data.values || [];
+
+    // Find matching row index (1-indexed for Sheets API, row 1 is header)
+    const rowIndex = rows.findIndex(
+      row => row[0]?.toLowerCase().trim() === ingredientName.toLowerCase().trim()
+    );
+    if (rowIndex < 1) return false; // not found or is header
+
+    const sheetRowNumber = rowIndex + 1; // Sheets API is 1-indexed
+
+    // Store→column mapping (Ingredients tab): Monroe=E(4), Perinton=F(5), East=G(6)
+    const storeColMap: Record<string, string> = {
+      Monroe: 'E',
+      Perinton: 'F',
+      East: 'G'
+    };
+    const col = storeColMap[store];
+    if (!col) return false;
+
+    const range = `Ingredients!${col}${sheetRowNumber}`;
+    await fetch(
+      `${GOOGLE_SHEETS_API_BASE}/${targetId}/values/${range}?valueInputOption=USER_ENTERED`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ range, majorDimension: 'ROWS', values: [[aisleData]] })
+      }
+    );
+    return true;
+  } catch (err) {
+    console.error('updateStoreAisleInSheet failed:', err);
+    return false;
+  }
+}
 export async function fetchSheetHeaders(spreadsheetId: string | null): Promise<any> { return null; }
 export async function saveSchemaToSheet(spreadsheetId: string, schema: any, accessToken: string | null): Promise<boolean> { return true; }
 export async function saveDeviceToken(spreadsheetId: string, token: string, email: string, accessToken: string | null): Promise<boolean> { return true; }

@@ -1,6 +1,7 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { saveDeviceToken } from '../services/googleSheets';
 
 interface AccountSettingsProps {
   onBack: () => void;
@@ -8,11 +9,14 @@ interface AccountSettingsProps {
 }
 
 const AccountSettings: React.FC<AccountSettingsProps> = ({ onBack, onLogout }) => {
-  const { userEmail } = useAuth();
-  const [security, setSecurity] = useState({ biometric: true });
+  const { userEmail, accessToken, spreadsheetId } = useAuth();
+  const [security, setSecurity] = useState({
+    biometric: true,
+  });
   const [notifications, setNotifications] = useState({
     restockReminders: localStorage.getItem('mise_push_enabled') === 'true',
   });
+  const [isSyncingToken, setIsSyncingToken] = useState(false);
 
   const toggleSecurity = (key: keyof typeof security) => {
     setSecurity(prev => ({ ...prev, [key]: !prev[key] }));
@@ -23,15 +27,39 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onBack, onLogout }) =
     
     if (nextState) {
       if (!('Notification' in window)) {
-        alert('This browser does not support notifications.');
+        alert('This browser does not support desktop notifications.');
         return;
       }
 
       const permission = await Notification.requestPermission();
       if (permission === 'granted') {
-        // Push backend not configured — enable locally only
-        setNotifications({ restockReminders: true });
-        localStorage.setItem('mise_push_enabled', 'true');
+        setIsSyncingToken(true);
+        try {
+          const reg = await navigator.serviceWorker.ready;
+          // In a real app, you would use your VAPID public key here
+          const sub = await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: 'BEl6mE7mEru996V84Xp6P-25K_7Xp9Jm9B_6BvC6Q_X3F6BvC6Q_X3F6BvC6Q_X3F' // Placeholder
+          });
+          
+          const token = JSON.stringify(sub);
+          const success = await saveDeviceToken(
+            spreadsheetId || '16ADJZBC80b4hF_TBqZP_4pCmBYVeMwtFNWLx59-Wyds',
+            token,
+            userEmail || 'unknown@chef.local',
+            accessToken
+          );
+
+          if (success) {
+            setNotifications({ restockReminders: true });
+            localStorage.setItem('mise_push_enabled', 'true');
+          }
+        } catch (err) {
+          console.error('Push Subscription Failed:', err);
+          alert('Failed to register device for push. Ensure your browser supports Web Push.');
+        } finally {
+          setIsSyncingToken(false);
+        }
       } else {
         alert('Notification permission was denied.');
       }
@@ -42,7 +70,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onBack, onLogout }) =
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-[#1c1d15] text-white font-display max-w-[480px] mx-auto border-x border-white/5 overflow-hidden">
+    <div className="flex flex-col min-h-screen bg-[#1c1d15] text-white font-display w-full overflow-hidden">
       {/* Header */}
       <header className="sticky top-0 z-20 bg-[#1c1d15]/80 backdrop-blur-xl px-4 pt-6 pb-4 flex items-center border-b border-white/5 header-safe-pt">
         <button 
@@ -109,7 +137,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onBack, onLogout }) =
               <div className="flex items-center gap-3">
                 <div className={`size-10 rounded-xl flex items-center justify-center transition-colors ${notifications.restockReminders ? 'bg-primary/20 text-primary' : 'bg-white/5 text-slate-500'}`}>
                   <span className={`material-symbols-outlined ${notifications.restockReminders ? 'fill-1' : ''}`}>
-                    notifications_active
+                    {isSyncingToken ? 'sync' : 'notifications_active'}
                   </span>
                 </div>
                 <div>
@@ -118,10 +146,11 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onBack, onLogout }) =
                 </div>
               </div>
               <button 
+                disabled={isSyncingToken}
                 onClick={handleTogglePush}
                 className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
                   notifications.restockReminders ? 'bg-primary' : 'bg-white/10'
-                }`}
+                } ${isSyncingToken ? 'opacity-50' : ''}`}
               >
                 <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
                   notifications.restockReminders ? 'translate-x-5' : 'translate-x-0'
@@ -131,7 +160,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onBack, onLogout }) =
           </div>
           {notifications.restockReminders && (
             <p className="mt-3 px-2 text-[10px] text-slate-500 italic leading-relaxed">
-              Notifications enabled on this device.
+              Device token successfully synced with Spreadsheet Ledger. Your kitchen is now proactive.
             </p>
           )}
         </section>

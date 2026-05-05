@@ -60,7 +60,7 @@ const AddPantryItem: React.FC<AddPantryItemProps> = ({ onBack, onSave }) => {
   };
 
   return (
-    <div className="max-w-md mx-auto min-h-screen flex flex-col relative bg-[#1c1d15] text-gray-100 overflow-x-hidden font-display">
+    <div className="w-full min-h-screen flex flex-col relative bg-[#1c1d15] text-gray-100 overflow-x-hidden font-display">
       <header className="sticky top-0 z-20 bg-[#1c1d15] border-b border-white/10">
         <div className="flex items-center p-4 justify-between">
           <button 

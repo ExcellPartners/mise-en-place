@@ -43,7 +43,7 @@ const AddIngredient: React.FC<AddIngredientProps> = ({ masters, mappings, onBack
   };
 
   return (
-    <div className="bg-[#1c1d15] text-white min-h-screen flex flex-col max-w-[480px] mx-auto border-x border-white/5 font-sans relative">
+    <div className="bg-[#1c1d15] text-white min-h-screen flex flex-col w-full font-sans relative">
       {showToast && (
         <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[200] bg-[#1a1d14]/95 backdrop-blur-xl border border-white/10 px-6 py-3 rounded-2xl shadow-2xl animate-in fade-in slide-in-from-top-4 flex items-center gap-3">
           <span className="material-symbols-outlined text-[#636b2f] text-xl fill-1">check_circle</span>

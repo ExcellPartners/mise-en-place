@@ -173,6 +173,9 @@ const Collections: React.FC<CollectionsProps> = ({
 }) => {
   const [selectedTheme, setSelectedTheme] = useState<CollectionItem | null>(null);
   const [activeSection, setActiveSection] = useState<'collections' | 'history' | 'almostThere'>('collections');
+  const [almostThereCategory, setAlmostThereCategory] = useState('All');
+
+  const RECIPE_CATEGORIES = ['All', 'Main', 'Side', 'Whole Meal', 'Appetizer', 'Breakfast', 'Dessert', 'Cocktail'];
 
   const moneySaved = recentCount * 8;
 
@@ -188,7 +191,8 @@ const Collections: React.FC<CollectionsProps> = ({
     );
 
     return recipes
-      .filter(r => r.ingredients && r.ingredients.length > 0) // only recipes with loaded ingredients
+      .filter(r => r.ingredients && r.ingredients.length > 0)
+      .filter(r => almostThereCategory === 'All' || r.category === almostThereCategory)
       .map(recipe => {
         const missing = recipe.ingredients.filter(
           ing => ing.name && !inStockNames.has(ing.name.toLowerCase().trim())
@@ -198,7 +202,7 @@ const Collections: React.FC<CollectionsProps> = ({
       .filter(r => r.missingCount > 0 && r.missingCount <= 3)
       .sort((a, b) => a.missingCount - b.missingCount)
       .slice(0, 20);
-  }, [recipes, pantry]);
+  }, [recipes, pantry, almostThereCategory]);
 
   // Cooked history sorted newest first
   const sortedHistory = useMemo(() => 
@@ -400,9 +404,26 @@ const Collections: React.FC<CollectionsProps> = ({
         {/* ── Almost There tab ── */}
         {activeSection === 'almostThere' && (
           <div className="px-4 pt-6">
-            <div className="mb-6">
+            <div className="mb-4">
               <h2 className="text-xl font-black text-white tracking-tight mb-1">Almost There</h2>
               <p className="text-[#b6baa1] text-sm font-medium">Recipes you can make with just a few more ingredients.</p>
+            </div>
+
+            {/* Category filter pills */}
+            <div className="flex gap-2 overflow-x-auto no-scrollbar pb-4 -mx-4 px-4">
+              {RECIPE_CATEGORIES.map(cat => (
+                <button
+                  key={cat}
+                  onClick={() => setAlmostThereCategory(cat)}
+                  className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all flex-shrink-0 ${
+                    almostThereCategory === cat
+                      ? 'bg-[#636b2f] text-white'
+                      : 'bg-white/5 text-gray-400 border border-white/10'
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
             </div>
             {pantry.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-24 text-center opacity-40 px-8">

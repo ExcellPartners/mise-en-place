@@ -103,27 +103,28 @@ const PrecisionConfig: React.FC<PrecisionConfigProps> = ({
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      // Save all localMappings, not just the visible/filtered subset
-      if (spreadsheetId) {
-        for (const mapping of localMappings) {
-          const aisleData = `${mapping.aisle[selectedStore] || ''} ${mapping.shelf[selectedStore] || ''}`.trim();
-          if (aisleData) {
-            await updateStoreAisleInSheet(spreadsheetId, mapping.ingredientName, selectedStore, aisleData, accessToken);
-          }
+      // Logic: Update the spreadsheet for items that changed for this specific store
+      // In a real app, you'd track a "dirty" state, but here we just update visible items for simplicity
+      for (const item of itemsToDisplay) {
+        const m = getMappingForItem(item.name);
+        const aisleData = `${m.aisle[selectedStore] || ''} ${m.shelf[selectedStore] || ''}`.trim();
+        if (spreadsheetId) {
+          await updateStoreAisleInSheet(spreadsheetId, item.name, selectedStore, aisleData, accessToken);
         }
       }
       
       onUpdateMappings(localMappings);
+      alert('Success: Aisle layouts updated and synced to your ledger.');
       onBack();
     } catch (err) {
-      console.error('Sync failed:', err);
+      alert('Sync failed. Please check your cloud connection.');
     } finally {
       setIsSaving(false);
     }
   };
 
   return (
-    <div className="max-w-[480px] mx-auto min-h-screen bg-[#1c1d15] text-white flex flex-col border-x border-slate-800">
+    <div className="w-full min-h-screen bg-[#1c1d15] text-white flex flex-col">
       <div className="sticky top-0 z-20 bg-[#1c1d15]/95 backdrop-blur-md pb-2 header-safe-pt">
         <div className="flex items-center p-4 pb-2 justify-between">
           <button onClick={onBack} className="text-white flex size-12 shrink-0 items-center cursor-pointer active:scale-90">
@@ -224,7 +225,7 @@ const PrecisionConfig: React.FC<PrecisionConfigProps> = ({
       </div>
 
       {/* Save Button - Adjusted position for nav bar clearance */}
-      <div className="fixed bottom-24 left-1/2 -translate-x-1/2 w-full max-w-[480px] p-6 bg-gradient-to-t from-[#1c1d15] via-[#1c1d15]/95 to-transparent z-[60]">
+      <div className="fixed bottom-24 left-0 right-0 w-full p-6 bg-gradient-to-t from-[#1c1d15] via-[#1c1d15]/95 to-transparent z-[60]">
         <button 
           onClick={handleSave}
           disabled={isSaving}

@@ -33,7 +33,7 @@ const SyncSettings: React.FC<SyncSettingsProps> = ({
   };
 
   return (
-    <div className="relative flex min-h-screen w-full flex-col overflow-x-hidden bg-[#0f110c] text-white font-sans max-w-[480px] mx-auto">
+    <div className="relative flex min-h-screen w-full flex-col overflow-x-hidden bg-[#0f110c] text-white font-sans">
       <input 
         type="file" 
         ref={fileInputRef} 

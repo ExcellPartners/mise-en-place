@@ -28,7 +28,7 @@ const AddNewMyItemEntry: React.FC<AddNewMyItemEntryProps> = ({ onBack, onSave })
   };
 
   return (
-    <div className="bg-[#1c1d15] text-white min-h-screen flex flex-col max-w-[480px] mx-auto border-x border-white/5 font-sans overflow-y-auto no-scrollbar pb-32">
+    <div className="bg-[#1c1d15] text-white min-h-screen flex flex-col w-full font-sans overflow-y-auto no-scrollbar pb-32">
       <header className="sticky top-0 z-50 bg-[#1c1d15]/95 backdrop-blur-md border-b border-white/5 header-safe-pt">
         <div className="flex items-center px-4 py-4 justify-between">
           <button onClick={onBack} className="text-[#636b2f] flex size-10 items-center justify-center active:scale-90">
