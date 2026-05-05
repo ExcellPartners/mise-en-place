@@ -24,7 +24,7 @@ if (!rootElement) {
 const root = ReactDOM.createRoot(rootElement);
 root.render(
   <React.StrictMode>
-    <GoogleOAuthProvider clientId="1064057396652-3u4b3v4b3v4b3v4b3v4b3v4b3v4b3v4b.apps.googleusercontent.com">
+    <GoogleOAuthProvider clientId="YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com" /* ← paste your real Client ID here */>
       <AuthProvider>
         <App />
       </AuthProvider>

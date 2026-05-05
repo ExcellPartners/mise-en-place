@@ -78,31 +78,62 @@ const App: React.FC = () => {
   const [navDirection, setNavDirection] = useState<'forward' | 'back' | 'root'>('root');
   const [screenKey, setScreenKey] = useState(0);
 
-  // Push a dummy history entry so the browser/OS back gesture hits us, not the previous site
-  useEffect(() => {
-    // Push an initial state so we always have something to intercept
-    window.history.pushState({ mise: true }, '');
+  // Ref so popstate listener always sees current viewStack without stale closure
+  const viewStackRef = useRef<View[]>(viewStack);
+  useEffect(() => { viewStackRef.current = viewStack; }, [viewStack]);
 
-    const handlePopState = () => {
-      if (viewStack.length > 1) {
-        // App has depth — go back within app and push state again to keep intercepting
-        goBack();
-        window.history.pushState({ mise: true }, '');
-      } else {
-        // At root — re-push so the next swipe doesn't leave the app
-        window.history.pushState({ mise: true }, '');
+  // Meal plan persistence — load from localStorage on mount
+  const [mealPlans, setMealPlans] = useState<MealPlan[]>(() => {
+    try {
+      const saved = localStorage.getItem('mise_meal_plans');
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
+
+  const setMealPlansAndSync = (updater: MealPlan[] | ((prev: MealPlan[]) => MealPlan[])) => {
+    setMealPlans(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      localStorage.setItem('mise_meal_plans', JSON.stringify(next));
+      if (accessToken && spreadsheetId) {
+        fetch(
+          `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/AppState!A1?valueInputOption=RAW`,
+          {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
+            body: JSON.stringify({ values: [[JSON.stringify(next)]] })
+          }
+        ).catch(() => {});
       }
+      return next;
+    });
+  };
+
+  // Browser/OS back gesture interception using History API
+  // Uses a ref so the listener always sees current stack depth
+  useEffect(() => {
+    // Push initial state so we have something to intercept
+    window.history.pushState({ mise: true }, '', window.location.href);
+
+    const handlePopState = (e: PopStateEvent) => {
+      const currentStack = viewStackRef.current;
+      if (currentStack.length > 1) {
+        // Navigate back within app
+        setNavDirection('back');
+        setScreenKey(k => k + 1);
+        setViewStack(prev => prev.slice(0, -1));
+      }
+      // Always re-push so next gesture also hits us, not browser history
+      window.history.pushState({ mise: true }, '', window.location.href);
     };
 
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [viewStack]);
+  }, []); // empty deps — uses ref, no stale closure
 
   const goForward = (view: View) => {
     setNavDirection('forward');
     setScreenKey(k => k + 1);
     setViewStack(prev => [...prev, view]);
-    window.history.pushState({ mise: true }, '');
   };
 
   const goBack = () => {
@@ -153,7 +184,7 @@ const App: React.FC = () => {
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [scannedRecipeData, setScannedRecipeData] = useState<Recipe | undefined>(undefined);
   // Planner now starts empty as requested
-  const [mealPlans, setMealPlans] = useState<MealPlan[]>([]);
+  // Planner render uses setMealPlansAndSync for persistence
   
   // Cooked History for Recap
   const [cookedHistory, setCookedHistory] = useState<{date: string; recipeId: string}[]>(() => {
@@ -223,7 +254,7 @@ const App: React.FC = () => {
 
   useEffect(() => { if (isAuthenticated && isProfileComplete) triggerSync(); }, [isAuthenticated, isProfileComplete]);
 
-  // Touch swipe handlers — horizontal swipe to go back
+  // Touch swipe — kept as additional fallback for devices where popstate doesn't fire
 
   // Swipe Handlers
   const onTouchStart = (e: React.TouchEvent) => {
@@ -289,7 +320,7 @@ const App: React.FC = () => {
   };
 
   const handleRemoveMealPlan = (date: string, mealType: string) => {
-    setMealPlans(prev => prev.filter(p => !(p.date === date && p.mealType === mealType)));
+    setMealPlansAndSync(prev => prev.filter(p => !(p.date === date && p.mealType === mealType)));
   };
 
   const handleAddToShopping = (ing: MasterIngredient | MyItem | string | RecipeIngredient, source: 'recipe' | 'manual' | 'myItem', amountOverride?: number) => {
@@ -473,7 +504,7 @@ const App: React.FC = () => {
     if (currentView === 'planner') return <Planner 
       mealPlans={mealPlans} recipes={recipesList} pantry={pantry} pinnedIds={pinnedRecipeIds} 
       shoppingList={rawShoppingEntries}
-      onScheduleMeal={(d, t, id) => setMealPlans(prev => [...prev, {date:d, mealType:t, recipeId:id, servings:4}])} 
+      onScheduleMeal={(d, t, id) => setMealPlansAndSync(prev => [...prev, {date:d, mealType:t, recipeId:id, servings:4}])} 
       onGenerateShopping={() => resetToView('shopping')} onBack={handleBack} 
       onStartCooking={(r) => { setSelectedRecipe(r); navigateTo('cookingMode'); }} 
       onAddToShopping={(ings) => ings.forEach(ing => handleAddToShopping(ing, 'recipe'))} 
@@ -489,7 +520,7 @@ const App: React.FC = () => {
           setCookedHistory(updatedHistory);
           localStorage.setItem('mise_cooked_history', JSON.stringify(updatedHistory));
 
-          setMealPlans([]);
+          setMealPlansAndSync([]);
           handleClearShoppingList();
           alert('Menu Archived & Ingredients Deducted from Pantry.');
           triggerSync();
@@ -600,12 +631,12 @@ const App: React.FC = () => {
     />;
   };
 
-  const transitionClass = navDirection === 'forward' ? 'screen-enter' 
-    : navDirection === 'back' ? 'screen-back' 
+  const transitionClass = navDirection === 'forward' ? 'screen-enter'
+    : navDirection === 'back' ? 'screen-back'
     : 'screen-fade';
 
   return (
-    <div 
+    <div
       className="min-h-screen w-full bg-[#000000] text-gray-200 flex flex-col overflow-hidden"
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}

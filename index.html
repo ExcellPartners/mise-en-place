@@ -67,7 +67,7 @@
       padding-top: var(--safe-top-padding);
     }
 
-    /* ── Safe area variables ── */
+    /* Safe area variables — works on iPhone notch, Android, tablet */
     :root {
       --safe-top: env(safe-area-inset-top, 0px);
       --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -75,17 +75,17 @@
     .header-safe-pt { padding-top: calc(var(--safe-top) + 1rem); }
     .nav-safe-pb    { padding-bottom: calc(var(--safe-bottom) + 0.75rem); }
 
-    /* ── Screen transitions ── */
+    /* Screen transition animations — subtle, 200ms */
     @keyframes screenEnter {
-      from { opacity: 0; transform: translateX(18px); }
+      from { opacity: 0; transform: translateX(16px); }
       to   { opacity: 1; transform: translateX(0); }
     }
     @keyframes screenBack {
-      from { opacity: 0; transform: translateX(-12px); }
+      from { opacity: 0; transform: translateX(-10px); }
       to   { opacity: 1; transform: translateX(0); }
     }
     @keyframes screenFade {
-      from { opacity: 0; transform: translateY(5px); }
+      from { opacity: 0; transform: translateY(4px); }
       to   { opacity: 1; transform: translateY(0); }
     }
     .screen-enter { animation: screenEnter 0.22s cubic-bezier(0.25, 0.46, 0.45, 0.94) both; }
