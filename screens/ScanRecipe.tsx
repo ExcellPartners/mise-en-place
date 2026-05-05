@@ -164,9 +164,6 @@ Rules:
     
     await processImage(fullResBase64, previewUrl);
   };
-    
-    await processImage(fullResBase64, previewUrl);
-  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
