@@ -62,11 +62,11 @@
     }
     /* App container — fluid on mobile, capped at comfortable tablet width */
     #root > div {
-      max-width: 680px;
+      max-width: 672px;
       margin-left: auto;
       margin-right: auto;
     }
-    /* Screens that use max-w-[480px] internally still look good — 
+    /* All screens now use max-w-2xl (672px) for consistent fluid layout — 
        this just prevents the outermost shell from going full 1440px */
     @media (min-width: 680px) {
       body {

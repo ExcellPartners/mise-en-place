@@ -66,7 +66,7 @@ const Toast: React.FC<{ message: string; isVisible: boolean }> = ({ message, isV
 };
 
 const App: React.FC = () => {
-  const { accessToken, userEmail, userName, spreadsheetId, logout, isAuthenticated, isProfileComplete, completeProfile, login, updateName } = useAuth();
+  const { accessToken, userEmail, userName, spreadsheetId, logout, isAuthenticated, isProfileComplete, completeProfile, login } = useAuth();
   const [viewStack, setViewStack] = useState<View[]>(() => !isAuthenticated ? ['login'] : !isProfileComplete ? ['onboarding'] : ['recipes']);
   
   // Refs for scroll persistence
@@ -374,7 +374,7 @@ const App: React.FC = () => {
     if (spreadsheetId) {
       await updateUserProfile(spreadsheetId, data, accessToken);
     }
-    updateName(data.name);
+    login(data.name);
     setUserAvatar(data.avatarUrl); // Update local avatar state
     setUserBio(data.bio); // Update local bio state
     
@@ -407,28 +407,13 @@ const App: React.FC = () => {
         masters={masterIngredients} 
         mappings={mappings} 
         onBack={handleBack} 
-        onAdd={isFromPantry ? handleAddToPantry : (m) => {
-          handleAddToShopping(m, 'manual');
-          showToast(`${m.name} added to Shopping List`);
-        }}
+        onAdd={isFromPantry ? handleAddToPantry : (m) => handleAddToShopping(m, 'recipe')} 
         onAddNewManual={() => navigateTo('addPantryItem')} 
         mode={isFromPantry ? 'pantry' : 'shopping'}
       />;
     }
 
-    if (currentView === 'addMyItem') return <AddMyItem items={myItemsList} onBack={handleBack} onAdd={(i) => {
-      // MyItems use packages as quantity, buyAs as unit — pass as myItem source so aisle data resolves
-      setRawShoppingEntries(prev => {
-        const key = i.name.toLowerCase();
-        const existing = prev.findIndex(e => e.name.toLowerCase() === key && !e.completed);
-        const next = existing >= 0
-          ? prev.map((e, idx) => idx === existing ? { ...e, amount: e.amount + (i.packages || 1) } : e)
-          : [...prev, { name: i.name, amount: i.packages || 1, unit: i.buyAs || 'unit', source: 'myItem' as const, completed: false }];
-        localStorage.setItem('mise_active_trip_raw', JSON.stringify(next));
-        return next;
-      });
-      showToast(`${i.name} added to Shopping List`);
-    }} onAddNewManual={() => navigateTo('addNewMyItemEntry')} />;
+    if (currentView === 'addMyItem') return <AddMyItem items={myItemsList} onBack={handleBack} onAdd={(i) => handleAddToShopping(i, 'myItem')} onAddNewManual={() => navigateTo('addNewMyItemEntry')} />;
     if (currentView === 'addNewMyItemEntry') return <AddNewMyItemEntry onBack={handleBack} onSave={handleSaveNewMyItem} />;
     
     if (currentView === 'addPantryItem') return <AddPantryItem onBack={handleBack} onSave={handleSavePantryItem} />;
@@ -588,7 +573,7 @@ const App: React.FC = () => {
       <main ref={mainRef} className="flex-1 overflow-y-auto no-scrollbar pb-24">{renderView()}</main>
 
       {isAuthenticated && isProfileComplete && !['login', 'onboarding', 'cookingMode', 'scanRecipe', 'addRecipeManual'].includes(viewStack[viewStack.length - 1]) && (
-        <nav className="fixed bottom-0 left-0 right-0 bg-[#0a0c0a]/95 backdrop-blur-xl border-t border-gray-800 px-4 py-3 pb-8 flex justify-around items-end z-[100] max-w-[480px] mx-auto">
+        <nav className="fixed bottom-0 left-0 right-0 bg-[#0a0c0a]/95 backdrop-blur-xl border-t border-gray-800 px-4 py-3 pb-8 flex justify-around items-end z-[100] max-w-2xl mx-auto">
           <button onClick={() => resetToView('recipes')} className="flex flex-col items-center gap-1 text-gray-400"><span className="material-symbols-outlined">home</span><span className="text-[10px] font-bold uppercase">Home</span></button>
           <button onClick={() => resetToView('planner')} className="flex flex-col items-center gap-1 text-gray-400"><span className="material-symbols-outlined">calendar_today</span><span className="text-[10px] font-medium uppercase">Planner</span></button>
           <div className="relative -top-4"><button onClick={() => setIsAddOverlayOpen(true)} className="w-14 h-14 bg-primary rounded-full shadow-2xl flex items-center justify-center text-white ring-4 ring-background-dark"><span className="material-symbols-outlined text-3xl font-bold">add</span></button></div>

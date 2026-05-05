@@ -22,17 +22,13 @@ const ROLES = [
 const EditProfile: React.FC<EditProfileProps> = ({ onBack, onSave, initialName, initialBio, initialAvatar }) => {
   // Parse initial name to separate Role from Name
   const parseName = (fullName: string) => {
-    // Check for standard roles first
     for (const r of ROLES.filter(r => r !== 'Custom')) {
       if (fullName.startsWith(r + ' ')) {
         return { role: r, realName: fullName.substring(r.length + 1) };
       }
     }
-    // Fallback: If no known role, assume "Chef" if it starts with it, otherwise Custom or Home Cook
-    if (fullName.startsWith("Chef ")) {
-      return { role: "Chef", realName: fullName.substring(5) };
-    }
-    return { role: "Home Cook", realName: fullName };
+    // No matching role prefix — treat the whole thing as the name, no role
+    return { role: 'Home Cook', realName: fullName };
   };
 
   const initialParsed = parseName(initialName);

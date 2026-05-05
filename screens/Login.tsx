@@ -15,7 +15,7 @@ const Login: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-[1100] bg-[#0f110c] flex flex-col font-sans max-w-[480px] mx-auto overflow-hidden">
+    <div className="fixed inset-0 z-[1100] bg-[#0f110c] flex flex-col font-sans max-w-2xl mx-auto overflow-hidden">
       {/* Premium Background Elements */}
       <div className="absolute top-[-15%] right-[-30%] w-[100%] aspect-square bg-primary/25 rounded-full blur-[140px] opacity-60"></div>
       <div className="absolute bottom-[-10%] left-[-25%] w-[80%] aspect-square bg-primary/15 rounded-full blur-[120px] opacity-40"></div>

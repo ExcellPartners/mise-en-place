@@ -103,21 +103,20 @@ const PrecisionConfig: React.FC<PrecisionConfigProps> = ({
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      // Logic: Update the spreadsheet for items that changed for this specific store
-      // In a real app, you'd track a "dirty" state, but here we just update visible items for simplicity
-      for (const item of itemsToDisplay) {
-        const m = getMappingForItem(item.name);
-        const aisleData = `${m.aisle[selectedStore] || ''} ${m.shelf[selectedStore] || ''}`.trim();
-        if (spreadsheetId) {
-          await updateStoreAisleInSheet(spreadsheetId, item.name, selectedStore, aisleData, accessToken);
+      // Save all localMappings, not just the visible/filtered subset
+      if (spreadsheetId) {
+        for (const mapping of localMappings) {
+          const aisleData = `${mapping.aisle[selectedStore] || ''} ${mapping.shelf[selectedStore] || ''}`.trim();
+          if (aisleData) {
+            await updateStoreAisleInSheet(spreadsheetId, mapping.ingredientName, selectedStore, aisleData, accessToken);
+          }
         }
       }
       
       onUpdateMappings(localMappings);
-      alert('Success: Aisle layouts updated and synced to your ledger.');
       onBack();
     } catch (err) {
-      alert('Sync failed. Please check your cloud connection.');
+      console.error('Sync failed:', err);
     } finally {
       setIsSaving(false);
     }

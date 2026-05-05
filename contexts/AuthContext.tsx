@@ -7,7 +7,6 @@ interface AuthContextType {
   spreadsheetId: string | null;
   isProfileComplete: boolean;
   login: (name: string) => void;
-  updateName: (name: string) => void;
   completeProfile: (name: string, sheetId: string) => void;
   logout: () => void;
   isAuthenticated: boolean;
@@ -31,13 +30,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   });
 
   const login = (name: string) => {
-    const existingToken = localStorage.getItem('mise_mock_token');
-    const mockToken = existingToken || `mock_session_chef_${name.toLowerCase().replace(/\s/g, '_')}`;
-    const existingEmail = localStorage.getItem('mise_user_email');
-    const mockEmail = existingEmail || `${name.toLowerCase().replace(/\s/g, '.')}@kitchen.local`;
+    // Generate a persistent mock session token for the sandbox
+    const mockToken = `mock_session_chef_${name.toLowerCase()}`;
+    const mockEmail = `${name.toLowerCase().replace(/\s/g, '.')}@kitchen.local`;
     
     setAccessToken(mockToken);
     setUserEmail(mockEmail);
+    // Updated: Accept name exactly as provided (e.g. "Bartender Maddie") without forcing "Chef"
     setUserName(name);
     setSpreadsheetId(TARGET_SHEET_ID);
     
@@ -47,12 +46,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     localStorage.setItem('mise_sheet_id', TARGET_SHEET_ID);
     localStorage.setItem('mise_profile_complete', 'true');
     setIsProfileComplete(true);
-  };
-
-  // Lightweight name-only update for profile edits — doesn't touch token or email
-  const updateName = (name: string) => {
-    setUserName(name);
-    localStorage.setItem('mise_user_name', name);
   };
 
   const completeProfile = (name: string, sheetId: string) => {
@@ -82,8 +75,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       userName, 
       spreadsheetId,
       isProfileComplete, 
-      login,
-      updateName,
+      login, 
       completeProfile,
       logout, 
       isAuthenticated 
