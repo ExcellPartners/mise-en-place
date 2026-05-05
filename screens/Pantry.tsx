@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { PantryItem, StoreMapping, MasterIngredient } from '../types';
+import { PantryItem, StoreMapping } from '../types';
 import { pluralizeUnit } from '../utils/logic';
 
 interface PantryProps {
@@ -11,51 +11,37 @@ interface PantryProps {
   onAddToList?: (item: PantryItem) => void;
 }
 
-type Tab = 'In Stock' | 'Low Stock' | 'Out';
+type Tab = 'In Stock' | 'Low Stock' | 'Out' | 'Expired';
 
 const Pantry: React.FC<PantryProps> = ({ pantry, mappings, onUpdate, onAddNew, onAddToList }) => {
   const [activeTab, setActiveTab] = useState<Tab>('In Stock');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Calculate badges based on logic
-  // Low Stock = Quantity > 0 AND Quantity < 2
   const lowStockCount = pantry.filter(item => (item.quantity || 0) > 0 && (item.quantity || 0) < 2).length;
+  const expiredCount  = pantry.filter(item => item.isExpired || item.isExpiringSoon).length;
 
   const updateQuantity = (name: string, delta: number) => {
     onUpdate(pantry.map(item => {
       if (item.name === name) {
         const newQty = Math.max(0, (item.quantity || 0) + delta);
-        // Col B (InStock) Logic: True if > 0
-        const isNowInStock = newQty > 0;
-        // Col C (LowStock) Logic: True if > 0 and < 2
-        const isLow = isNowInStock && newQty < 2;
-        return { 
-          ...item, 
-          quantity: newQty,
-          inStock: isNowInStock,
-          lowStock: isLow
-        };
+        return { ...item, quantity: newQty, inStock: newQty > 0, lowStock: newQty > 0 && newQty < 2 };
       }
       return item;
     }));
   };
 
   const groupedPantry = useMemo<Record<string, PantryItem[]>>(() => {
-    // 1. Filter by search and strict tab logic
     const filtered = pantry.filter(item => {
       const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase());
       if (!matchesSearch) return false;
-      
       const qty = item.quantity || 0;
-
-      if (activeTab === 'In Stock') return qty > 0; // Col B implied logic
-      if (activeTab === 'Low Stock') return qty > 0 && qty < 2; // Col C implied logic
-      if (activeTab === 'Out') return qty === 0; // Col D logic
-      
+      if (activeTab === 'In Stock')  return qty > 0 && !item.isExpired;
+      if (activeTab === 'Low Stock') return qty > 0 && qty < 2 && !item.isExpired;
+      if (activeTab === 'Out')       return qty === 0 && !item.isExpired;
+      if (activeTab === 'Expired')   return !!item.isExpired || !!item.isExpiringSoon;
       return true;
     });
 
-    // 2. Group by Category (from mapping cross-reference)
     const groups: Record<string, PantryItem[]> = {};
     filtered.forEach(item => {
       const map = mappings.find(m => m.ingredientName.toLowerCase() === item.name.toLowerCase());
@@ -64,20 +50,35 @@ const Pantry: React.FC<PantryProps> = ({ pantry, mappings, onUpdate, onAddNew, o
       groups[cat].push(item);
     });
 
-    // 3. Sort Categories A-Z and Items A-Z
     const sortedGroups: Record<string, PantryItem[]> = {};
+    // Expired tab: sort by days remaining ascending (most urgent first)
     Object.keys(groups).sort().forEach(cat => {
-      sortedGroups[cat] = groups[cat].sort((a, b) => a.name.localeCompare(b.name));
+      sortedGroups[cat] = groups[cat].sort((a, b) => {
+        if (activeTab === 'Expired') return (a.daysRemaining ?? 999) - (b.daysRemaining ?? 999);
+        return a.name.localeCompare(b.name);
+      });
     });
     return sortedGroups;
   }, [pantry, activeTab, searchQuery, mappings]);
 
+  const formatExpiryLabel = (item: PantryItem): { label: string; color: string } => {
+    if (item.isExpired) return { label: 'Expired — discard', color: 'text-red-400' };
+    if (item.daysRemaining !== null && item.daysRemaining !== undefined) {
+      if (item.daysRemaining <= 0) return { label: 'Gone bad today', color: 'text-red-400' };
+      if (item.daysRemaining === 1) return { label: 'Expires tomorrow', color: 'text-orange-400' };
+      if (item.daysRemaining <= 3) return { label: `${Math.round(item.daysRemaining)} days left`, color: 'text-orange-400' };
+      if (item.daysRemaining <= 7) return { label: `Use within ${Math.round(item.daysRemaining)} days`, color: 'text-amber-400' };
+    }
+    if (item.expiryDate) return { label: `Best by ${item.expiryDate}`, color: 'text-white/30' };
+    return { label: '', color: '' };
+  };
+
   return (
-    <div className="w-full max-w-[480px] mx-auto min-h-screen flex flex-col bg-[#1c1d15] text-gray-100 overflow-x-hidden font-sans">
-      {/* Role Reversal Header */}
+    <div className="w-full min-h-screen flex flex-col bg-[#1c1d15] text-gray-100 overflow-x-hidden font-sans">
+      {/* Header */}
       <header className="sticky top-0 z-20 bg-[#1c1d15] header-safe-pt">
         <div className="flex items-center px-4 py-4 justify-between">
-          <div className="w-10"></div> {/* Placeholder for potentially back button if this view is pushed */}
+          <div className="w-10"></div>
           <div className="flex-1 text-center">
             <h2 className="text-white text-lg font-black leading-tight tracking-tight uppercase">Kitchen Ledger</h2>
             <p className="text-[#636b2f] text-[9px] font-black uppercase tracking-[0.2em] mt-0.5">Mise en Place</p>
@@ -92,17 +93,20 @@ const Pantry: React.FC<PantryProps> = ({ pantry, mappings, onUpdate, onAddNew, o
 
         {lowStockCount > 0 && (
           <div className="px-4 pb-4">
-            <button 
-              onClick={() => setActiveTab('Low Stock')}
-              className="w-full bg-[#2a2c21] border border-[#3b3e2e] rounded-[1.5rem] p-5 flex items-center gap-4 active:scale-[0.98] transition-all"
+        {/* Expired/expiring alert banner */}
+        {expiredCount > 0 && (
+          <div className="px-4 pb-3">
+            <button
+              onClick={() => setActiveTab('Expired')}
+              className="w-full bg-red-500/10 border border-red-500/20 rounded-[1.5rem] p-4 flex items-center gap-4 active:scale-[0.98] transition-all"
             >
-              <div className="bg-[#636b2f] text-[#0f110c] rounded-full size-10 flex items-center justify-center shrink-0">
-                <span className="material-symbols-outlined text-2xl font-black">priority_high</span>
+              <div className="bg-red-500 text-white rounded-full size-10 flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-xl font-black">delete_forever</span>
               </div>
               <div className="flex-1 text-left">
-                <p className="text-[10px] font-black text-[#636b2f] uppercase tracking-[0.2em] mb-0.5">Low Stock Alerts</p>
+                <p className="text-[10px] font-black text-red-400 uppercase tracking-[0.2em] mb-0.5">Throw Out Reminder</p>
                 <p className="text-base font-medium text-white/90 leading-tight">
-                  {lowStockCount} {lowStockCount === 1 ? 'item is' : 'items are'} running low
+                  {expiredCount} {expiredCount === 1 ? 'item has' : 'items have'} expired or expire soon
                 </p>
               </div>
               <span className="material-symbols-outlined text-white/20">chevron_right</span>
@@ -125,19 +129,22 @@ const Pantry: React.FC<PantryProps> = ({ pantry, mappings, onUpdate, onAddNew, o
         </div>
 
         <div className="px-4">
-          <div className="flex gap-2 pb-4">
-            {(['In Stock', 'Low Stock', 'Out'] as Tab[]).map(tab => (
+          <div className="flex gap-1.5 pb-4">
+            {(['In Stock', 'Low Stock', 'Out', 'Expired'] as Tab[]).map(tab => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`flex-1 flex flex-col items-center justify-center h-11 rounded-xl transition-all relative font-bold text-xs uppercase tracking-widest ${
-                  activeTab === tab 
-                    ? 'bg-[#636b2f] text-white' 
+                className={`flex-1 flex flex-col items-center justify-center h-11 rounded-xl transition-all relative font-bold text-[9px] uppercase tracking-wider ${
+                  activeTab === tab
+                    ? tab === 'Expired' ? 'bg-red-500/80 text-white' : 'bg-[#636b2f] text-white'
                     : 'bg-[#2a2c21] text-white/40 border border-white/5'
                 }`}
               >
                 {tab}
                 {tab === 'Low Stock' && lowStockCount > 0 && (
+                  <span className="absolute -top-1 -right-1 size-2.5 bg-red-500 rounded-full border-2 border-[#0f110c]"></span>
+                )}
+                {tab === 'Expired' && expiredCount > 0 && (
                   <span className="absolute -top-1 -right-1 size-2.5 bg-red-500 rounded-full border-2 border-[#0f110c]"></span>
                 )}
               </button>
@@ -157,36 +164,40 @@ const Pantry: React.FC<PantryProps> = ({ pantry, mappings, onUpdate, onAddNew, o
                 {items.map((item, idx) => {
                   const qty = item.quantity ?? 0;
                   const isLow = qty > 0 && qty < 2;
+                  const expiryInfo = formatExpiryLabel(item);
+                  const cardBorder = item.isExpired ? 'border-red-500/30' : item.isExpiringSoon ? 'border-orange-500/30' : isLow ? 'border-[#636b2f]/30' : 'border-white/5';
                   return (
                     <div 
                       key={idx} 
-                      className={`flex flex-col gap-3 p-5 rounded-[1.5rem] border shadow-sm transition-all ${
-                        isLow 
-                          ? 'bg-[#2a2c21] border-[#636b2f]/30' 
-                          : 'bg-[#2a2c21] border-white/5'
-                      }`}
+                      className={`flex flex-col gap-3 p-5 rounded-[1.5rem] border shadow-sm transition-all bg-[#2a2c21] ${cardBorder}`}
                     >
                       <div className="flex items-center gap-4">
                         <div className={`flex items-center justify-center rounded-xl shrink-0 size-12 transition-colors ${
-                          isLow ? 'bg-[#636b2f]/20 text-[#636b2f]' : 'bg-white/5 text-white/40'
+                          item.isExpired ? 'bg-red-500/20 text-red-400' : item.isExpiringSoon ? 'bg-orange-500/20 text-orange-400' : isLow ? 'bg-[#636b2f]/20 text-[#636b2f]' : 'bg-white/5 text-white/40'
                         }`}>
                           <span className="material-symbols-outlined text-2xl">{item.icon || 'inventory_2'}</span>
                         </div>
                         <div className="flex flex-col justify-center flex-1">
                           <div className="flex items-center gap-2">
                             <p className="text-white text-lg font-bold leading-tight">{item.name}</p>
-                            {qty > 0 && !isLow && <span className="flex h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.4)]"></span>}
+                            {qty > 0 && !isLow && !item.isExpired && !item.isExpiringSoon && <span className="flex h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.4)]"></span>}
+                            {item.isExpired && <span className="flex h-2 w-2 rounded-full bg-red-500"></span>}
+                            {item.isExpiringSoon && !item.isExpired && <span className="flex h-2 w-2 rounded-full bg-orange-400"></span>}
                           </div>
-                          <div className="flex items-center gap-2 mt-0.5">
+                          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                             {qty !== undefined && (
                               <p className="text-[#636b2f] text-[10px] font-black uppercase tracking-widest">
                                 {qty % 1 === 0 ? qty : qty.toFixed(1)} {pluralizeUnit(item.unit, qty)}
                               </p>
                             )}
-                            <span className="text-white/10 text-[10px]">•</span>
-                            <p className={`text-[10px] font-bold uppercase tracking-widest ${isLow ? 'text-[#636b2f]' : 'text-white/30'}`}>
-                              {isLow ? 'Low' : (qty <= 0 ? 'Empty' : 'Ok')}
-                            </p>
+                            {expiryInfo.label && (
+                              <>
+                                <span className="text-white/10 text-[10px]">•</span>
+                                <p className={`text-[10px] font-bold uppercase tracking-widest ${expiryInfo.color}`}>
+                                  {expiryInfo.label}
+                                </p>
+                              </>
+                            )}
                           </div>
                         </div>
                         <div className="shrink-0">

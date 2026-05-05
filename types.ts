@@ -62,6 +62,14 @@ export interface PantryItem {
   unit?: string;
   icon?: string;
   lastUpdated?: string;
+  // Shelf life / expiry fields from Pantry Stock sheet
+  lastPurchased?: string;   // YYYY-MM-DD
+  ttlDays?: number;         // shelf life in days
+  daysRemaining?: number | null; // days until expired (UseSoon_Days col)
+  shelfStatus?: string;     // 'buy as needed', 'unknown', etc.
+  expiryDate?: string;      // calculated YYYY-MM-DD
+  isExpired?: boolean;      // EffectiveQty=0 but CurrentQty>0
+  isExpiringSoon?: boolean; // <= 5 days remaining
 }
 
 export interface EssentialItem {
