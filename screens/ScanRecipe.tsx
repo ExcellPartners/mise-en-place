@@ -21,28 +21,38 @@ const ScanRecipe: React.FC<ScanRecipeProps> = ({ onClose, onRecipeFound }) => {
   const [showHelp, setShowHelp] = useState(false);
   const [isShutterFlash, setIsShutterFlash] = useState(false);
   const [lastPickedImage, setLastPickedImage] = useState<string | null>(null);
+  const [cameraError, setCameraError] = useState<string | null>(null);
 
   useEffect(() => {
     let stream: MediaStream | null = null;
     
     async function startCamera() {
+      // Camera requires secure context (https or localhost)
+      const isSecure = window.location.protocol === 'https:' || window.location.hostname === 'localhost';
+      if (!isSecure) {
+        setCameraError('Camera requires HTTPS. Use the Vercel URL, or pick an image from your Roll instead.');
+        return;
+      }
+
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setCameraError('Camera not available in this browser. Use the Roll or Files button below.');
+        return;
+      }
+
       try {
-        // Attempt to get the rear camera specifically
         stream = await navigator.mediaDevices.getUserMedia({ 
-          video: { 
-            facingMode: 'environment',
-            width: { ideal: 1920 },
-            height: { ideal: 1080 }
-          }, 
+          video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }, 
           audio: false 
         });
       } catch (err) {
-        console.warn("Environment camera failed, falling back to default.", err);
         try {
-          // Fallback to any available video source
           stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-        } catch (fallbackErr) {
-          console.error("Camera access denied or unavailable", fallbackErr);
+        } catch (fallbackErr: any) {
+          if (fallbackErr.name === 'NotAllowedError') {
+            setCameraError('Camera permission denied. Allow camera access in your browser settings.');
+          } else {
+            setCameraError('Camera unavailable. Use the Roll button to pick an image instead.');
+          }
           return;
         }
       }
@@ -51,28 +61,14 @@ const ScanRecipe: React.FC<ScanRecipeProps> = ({ onClose, onRecipeFound }) => {
         videoRef.current.srcObject = stream;
         const track = stream.getVideoTracks()[0];
         trackRef.current = track;
-
-        // Check for torch capability
         const capabilities = track.getCapabilities() as any;
-        if (capabilities.torch) {
-          setHasTorch(true);
-        }
-
-        try {
-          await videoRef.current.play();
-        } catch (playError) {
-          console.error("Video play blocked:", playError);
-        }
+        if (capabilities.torch) setHasTorch(true);
+        try { await videoRef.current.play(); } catch (e) { console.error('Video play blocked:', e); }
       }
     }
     
     startCamera();
-    
-    return () => {
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-      }
-    };
+    return () => { if (stream) stream.getTracks().forEach(t => t.stop()); };
   }, []);
 
   const toggleFlash = async () => {
@@ -212,20 +208,21 @@ const ScanRecipe: React.FC<ScanRecipeProps> = ({ onClose, onRecipeFound }) => {
   };
 
   return (
-    <div className="bg-[#1c1d15] text-white h-screen flex flex-col w-full overflow-hidden relative">
-      {/* Hidden Inputs for Camera Roll and Files */}
+    <div className="fixed inset-0 bg-[#1c1d15] text-white flex flex-col w-full overflow-hidden z-[100]">
+      {/* Hidden file inputs */}
+      {/* capture="environment" opens rear camera directly on mobile */}
       <input 
         type="file" 
         ref={galleryInputRef} 
         onChange={handleFileChange} 
-        accept="image/*" 
+        accept="image/*"
+        capture="environment"
         className="hidden" 
       />
       <input 
         type="file" 
         ref={fileInputRef} 
         onChange={handleFileChange}
-        // Generic accept or specific if needed
         accept="image/*,application/pdf"
         className="hidden" 
       />
@@ -256,6 +253,24 @@ const ScanRecipe: React.FC<ScanRecipeProps> = ({ onClose, onRecipeFound }) => {
           playsInline 
           className="absolute inset-0 w-full h-full object-cover opacity-90"
         />
+
+        {/* Camera error state — shown when HTTPS not available or permission denied */}
+        {cameraError && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center px-8 text-center z-20 bg-[#12130d]">
+            <div className="size-20 rounded-[2rem] bg-[#2a2c21] border border-white/10 flex items-center justify-center mb-6">
+              <span className="material-symbols-outlined text-4xl text-[#636b2f]">no_photography</span>
+            </div>
+            <p className="text-white font-bold text-base mb-2">Camera Unavailable</p>
+            <p className="text-[#b6baa1] text-sm leading-relaxed mb-8">{cameraError}</p>
+            <button
+              onClick={() => galleryInputRef.current?.click()}
+              className="flex items-center gap-2 bg-[#636b2f] text-white font-bold px-6 py-3 rounded-2xl active:scale-95 transition-all"
+            >
+              <span className="material-symbols-outlined">photo_library</span>
+              Pick from Camera Roll
+            </button>
+          </div>
+        )}
         
         {isShutterFlash && <div className="absolute inset-0 bg-white z-50 animate-out fade-out duration-150"></div>}
         
