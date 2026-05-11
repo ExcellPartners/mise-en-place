@@ -44,6 +44,7 @@ const ShoppingList: React.FC<ShoppingListProps> = ({
 }) => {
   const [quickAddValue, setQuickAddValue] = useState('');
   const [swipeX, setSwipeX] = useState<Record<string, number>>({});
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
   
   // Track X and Y to distinguish between Swipe and Scroll
   const touchStart = useRef<{x: number, y: number} | null>(null);
@@ -151,7 +152,7 @@ const ShoppingList: React.FC<ShoppingListProps> = ({
   const completedCount = neededItems.filter(i => i.completed).length;
 
   return (
-    <div className="w-full min-h-screen flex flex-col relative overflow-x-hidden bg-[#000000] text-white font-sans">
+    <div className="w-full max-w-[480px] mx-auto min-h-screen flex flex-col relative overflow-x-hidden bg-[#000000] text-white font-sans">
       
       {/* Header */}
       <div className="sticky top-0 z-[60] bg-[#000000]/95 backdrop-blur-xl border-b border-white/5 header-safe-pt">
@@ -208,19 +209,14 @@ const ShoppingList: React.FC<ShoppingListProps> = ({
           </div>
         </div>
 
-        {/* Clear Button - Explicit Z-Index and Container */}
+        {/* Clear Button */}
         <div className="px-4 mb-4 flex justify-end relative z-20">
-           <button 
-              onClick={(e) => {
-                e.stopPropagation();
-                if (window.confirm("Are you sure you want to clear the entire list?")) {
-                  onClearList?.();
-                }
-              }}
-              className="text-red-500/60 text-[10px] font-black uppercase tracking-widest px-4 py-2 hover:text-red-500 transition-colors bg-white/5 rounded-lg active:bg-white/10 border border-white/5"
-            >
-              Clear Itinerary
-            </button>
+          <button 
+            onClick={(e) => { e.stopPropagation(); setShowClearConfirm(true); }}
+            className="text-red-500/60 text-[10px] font-black uppercase tracking-widest px-4 py-2 hover:text-red-500 transition-colors bg-white/5 rounded-lg active:bg-white/10 border border-white/5"
+          >
+            Clear Itinerary
+          </button>
         </div>
 
         {(Object.entries(groupedItems) as [string, ShoppingListItem[]][]).map(([header, items]) => {
@@ -314,18 +310,47 @@ const ShoppingList: React.FC<ShoppingListProps> = ({
         })}
       </div>
 
-      <div className="fixed bottom-[84px] left-0 right-0 w-full z-[90]">
-        <div className="px-4 pb-4 pt-4 bg-[#000000]/95 backdrop-blur-xl flex flex-col gap-4 shadow-[0_-20px_50px_rgba(0,0,0,0.5)] border-t border-white/5">
-          <button 
-            onClick={() => onCheckout?.(neededItems)}
-            disabled={completedCount === 0}
-            className="w-full bg-[#636b2f] disabled:opacity-30 text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-[#636b2f]/20 active:scale-[0.98] transition-all text-lg"
-          >
-            <span className="material-symbols-outlined">shopping_cart_checkout</span>
-            <span>Checkout Trip ({completedCount} Items)</span>
-          </button>
-        </div>
+      <div className="fixed bottom-0 left-0 right-0 z-[90] px-4 pb-[88px] pt-3 bg-gradient-to-t from-[#000000] via-[#000000]/90 to-transparent pointer-events-none">
+        <button
+          onClick={() => onCheckout?.(neededItems)}
+          disabled={completedCount === 0}
+          className="w-full pointer-events-auto bg-[#636b2f] disabled:opacity-30 text-white font-black py-4 rounded-2xl flex items-center justify-center gap-3 shadow-2xl shadow-[#636b2f]/20 active:scale-[0.98] transition-all text-base uppercase tracking-widest"
+        >
+          <span className="material-symbols-outlined">shopping_cart_checkout</span>
+          <span>Checkout Trip ({completedCount} Items)</span>
+        </button>
       </div>
+      {/* Themed clear confirmation — no ugly browser dialog */}
+      {showClearConfirm && (
+        <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-lg mx-4 mb-8 bg-[#2a2c21] rounded-3xl border border-white/10 shadow-2xl overflow-hidden animate-in slide-in-from-bottom duration-200">
+            <div className="p-6">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="size-10 rounded-xl bg-red-500/20 flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-red-400">delete_sweep</span>
+                </div>
+                <h3 className="text-white font-black text-lg">Clear Shopping List?</h3>
+              </div>
+              <p className="text-[#b6baa1] text-sm leading-relaxed">This will remove all items from your current trip. This can't be undone.</p>
+            </div>
+            <div className="flex border-t border-white/10">
+              <button
+                onClick={() => setShowClearConfirm(false)}
+                className="flex-1 py-4 text-white/60 font-bold text-sm active:bg-white/5 transition-colors"
+              >
+                Cancel
+              </button>
+              <div className="w-px bg-white/10"></div>
+              <button
+                onClick={() => { onClearList?.(); setShowClearConfirm(false); }}
+                className="flex-1 py-4 text-red-400 font-black text-sm active:bg-red-500/10 transition-colors"
+              >
+                Clear List
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

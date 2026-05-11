@@ -79,7 +79,7 @@ const ScanRecipe: React.FC<ScanRecipeProps> = ({ onClose, onRecipeFound }) => {
     setIsScanning(true);
     setScanError(null);
     try {
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
+      const response = await fetch('/api/scan-recipe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -254,7 +254,7 @@ Rules:
         </div>
       </div>
 
-      <div className="relative z-20 bg-[#1c1d15] border-t border-white/5 nav-safe-pb pt-4">
+      <div className="relative z-20 bg-[#1c1d15] border-t border-white/5 pt-4 pb-8" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 2rem)' }}>
         <div className="flex justify-center mb-5">
           <div className="flex bg-white/5 p-1 rounded-full gap-1">
             <button 

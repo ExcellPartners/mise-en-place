@@ -260,7 +260,7 @@ const Planner: React.FC<PlannerProps> = ({
   };
 
   return (
-    <div className="flex h-screen w-full flex-col bg-[#1c1d15] text-white font-display relative overflow-hidden">
+    <div className="flex h-screen w-full flex-col bg-[#1c1d15] text-white font-display max-w-[480px] mx-auto relative overflow-hidden">
       
       <Toast message={toast.message} isVisible={toast.visible} onClose={() => setToast(prev => ({ ...prev, visible: false }))} />
 
@@ -328,7 +328,7 @@ const Planner: React.FC<PlannerProps> = ({
         </div>
       </main>
 
-      <div className="fixed bottom-[84px] left-0 right-0 w-full z-40">
+      <div className="fixed bottom-0 left-0 right-0 pb-[88px] px-4 pt-3 z-40 bg-gradient-to-t from-[#0f110c] via-[#0f110c]/90 to-transparent pointer-events-none">
         <div className="px-4 pb-4 pt-4 bg-[#1c1d15]/95 backdrop-blur-xl flex flex-col gap-4 shadow-[0_-20px_50px_rgba(0,0,0,0.5)] border-t border-white/5">
           <button 
             onClick={() => setShowSummary(true)}
@@ -341,7 +341,7 @@ const Planner: React.FC<PlannerProps> = ({
       </div>
 
       {isCalendarOpen && (
-        <div className="fixed inset-0 z-[200] bg-[#0f110c] flex flex-col animate-in slide-in-from-bottom duration-300 w-full">
+        <div className="fixed inset-0 z-[200] bg-[#0f110c] flex flex-col animate-in slide-in-from-bottom duration-300 max-w-[480px] mx-auto">
           <header className="pt-4 px-4 header-safe-pt">
             <div className="flex items-center justify-between mb-6">
               <button onClick={() => setIsCalendarOpen(false)} className="flex items-center text-muted active:scale-90 transition-transform">
@@ -392,7 +392,7 @@ const Planner: React.FC<PlannerProps> = ({
       )}
 
       {showSummary && (
-        <div className="fixed inset-0 z-[250] bg-[#1c1d15] flex flex-col animate-in slide-in-from-bottom duration-300 w-full">
+        <div className="fixed inset-0 z-[250] bg-[#1c1d15] flex flex-col animate-in slide-in-from-bottom duration-300 max-w-[480px] mx-auto">
           <header className="px-4 py-6 flex items-center justify-between border-b border-white/5 header-safe-pt">
             <h2 className="text-2xl font-black tracking-tight">My Itinerary</h2>
             <button onClick={() => setShowSummary(false)} className="size-10 flex items-center justify-center bg-white/5 rounded-full active:scale-90"><span className="material-symbols-outlined">close</span></button>
@@ -459,7 +459,7 @@ const Planner: React.FC<PlannerProps> = ({
       {isPickerOpen && (
         <div className="fixed inset-0 z-[150] flex items-end justify-center">
           <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setIsPickerOpen(null)}></div>
-          <div className="relative w-full bg-[#2a2c21] rounded-t-[3rem] p-6 pb-12 flex flex-col gap-6 animate-in slide-in-from-bottom duration-300">
+          <div className="relative w-full max-w-[480px] bg-[#2a2c21] rounded-t-[3rem] p-6 pb-12 flex flex-col gap-6 animate-in slide-in-from-bottom duration-300">
             <div className="flex flex-col items-center gap-2">
               <div className="w-12 h-1.5 bg-[#3b3e2e] rounded-full mb-2"></div>
               <h4 className="text-2xl font-black text-white text-center">Choose for {isPickerOpen.type}</h4>
