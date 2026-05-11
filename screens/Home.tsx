@@ -14,47 +14,44 @@ interface HomeProps {
   onPlannerOpen: () => void;
   onCollectionsOpen: () => void;
   recentCount?: number;
+  initialPage?: number;
+  onPageChange?: (page: number) => void;
 }
 
 const RECIPES_PER_PAGE = 72;
 
 const Home: React.FC<HomeProps> = ({ 
-  recipes = [], 
-  pinnedIds = [], 
-  likedIds = [],
-  mealPlans = [],
-  onTogglePin, 
-  onRecipeSelect, 
-  onSettingsOpen, 
-  onPlannerOpen,
-  onCollectionsOpen,
-  recentCount = 0
+  recipes = [], pinnedIds = [], likedIds = [], mealPlans = [],
+  onTogglePin, onRecipeSelect, onSettingsOpen, onPlannerOpen, onCollectionsOpen,
+  recentCount = 0, initialPage = 1, onPageChange
 }) => {
   const [activeCategory, setActiveCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPage] = useState(initialPage);
   const categories = ['All', 'Favorites', 'Whole Meal', 'Main', 'Side', 'Appetizer', 'Cocktail', 'Breakfast', 'Dessert'];
 
   const displayRecipes = useMemo(() => {
-    return [...recipes]
-      .filter(recipe => {
-        let matchesCategory = true;
-        if (activeCategory === 'Favorites') matchesCategory = likedIds.includes(recipe.id);
-        else if (activeCategory !== 'All') matchesCategory = recipe.category === activeCategory;
-        const title = (recipe.title || '').toLowerCase();
-        const desc = (recipe.description || '').toLowerCase();
-        const query = searchQuery.toLowerCase();
-        return matchesCategory && (title.includes(query) || desc.includes(query));
-      })
-      .sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+    return [...recipes].filter(recipe => {
+      let matchesCategory = true;
+      if (activeCategory === 'Favorites') matchesCategory = likedIds.includes(recipe.id);
+      else if (activeCategory !== 'All') matchesCategory = recipe.category === activeCategory;
+      const title = (recipe.title || '').toLowerCase();
+      const desc = (recipe.description || '').toLowerCase();
+      const query = searchQuery.toLowerCase();
+      return matchesCategory && (title.includes(query) || desc.includes(query));
+    }).sort((a, b) => (a.title || '').localeCompare(b.title || ''));
   }, [recipes, activeCategory, searchQuery, likedIds]);
 
   const totalPages = Math.max(1, Math.ceil(displayRecipes.length / RECIPES_PER_PAGE));
   const safePage = Math.min(currentPage, totalPages);
   const pagedRecipes = displayRecipes.slice((safePage - 1) * RECIPES_PER_PAGE, safePage * RECIPES_PER_PAGE);
 
-  const handleCategoryChange = (cat: string) => { setActiveCategory(cat); setCurrentPage(1); };
-  const handleSearchChange = (q: string) => { setSearchQuery(q); setCurrentPage(1); };
+  const goToPage = (p: number) => {
+    setCurrentPage(p);
+    onPageChange?.(p);
+  };
+  const handleCategoryChange = (cat: string) => { setActiveCategory(cat); goToPage(1); };
+  const handleSearchChange = (q: string) => { setSearchQuery(q); goToPage(1); };
 
   return (
     <div className="w-full min-h-screen bg-[#000000]">
@@ -140,35 +137,34 @@ const Home: React.FC<HomeProps> = ({
         </div>
       </div>
 
-      {/* Pagination controls — top */}
+      {/* Top pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between px-5 mb-3 gap-2">
           <p className="text-white/30 text-[10px] font-black uppercase tracking-widest whitespace-nowrap shrink-0">
             {displayRecipes.length} recipes • {safePage}/{totalPages}
           </p>
           <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
-            <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={safePage === 1}
-              className="size-7 flex items-center justify-center rounded-lg bg-white/5 text-white/40 disabled:opacity-20 active:scale-90 transition-all shrink-0">
+            <button onClick={() => goToPage(Math.max(1, safePage - 1))} disabled={safePage === 1}
+              className="size-7 flex items-center justify-center rounded-lg bg-white/5 text-white/40 disabled:opacity-20 active:scale-90 shrink-0">
               <span className="material-symbols-outlined text-base">chevron_left</span>
             </button>
-            <div className="flex items-center gap-1 overflow-x-auto no-scrollbar max-w-[200px]">
+            <div className="flex items-center gap-1 max-w-[200px] overflow-x-auto no-scrollbar">
               {Array.from({ length: totalPages }, (_, i) => i + 1)
                 .filter(p => Math.abs(p - safePage) <= 2 || p === 1 || p === totalPages)
                 .reduce<(number | 'gap')[]>((acc, p, idx, arr) => {
-                  if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push('gap');
-                  acc.push(p);
-                  return acc;
+                  if (idx > 0 && p - (arr[idx-1] as number) > 1) acc.push('gap');
+                  acc.push(p); return acc;
                 }, [])
                 .map((item, idx) => item === 'gap'
                   ? <span key={`g${idx}`} className="text-white/20 text-[10px] px-0.5">…</span>
-                  : <button key={item} onClick={() => setCurrentPage(item as number)}
-                      className={`size-7 flex items-center justify-center rounded-lg text-[10px] font-black transition-all active:scale-90 shrink-0 ${item === safePage ? 'bg-[#636b2f] text-white' : 'bg-white/5 text-white/40'}`}>
+                  : <button key={item} onClick={() => goToPage(item as number)}
+                      className={`size-7 flex items-center justify-center rounded-lg text-[10px] font-black shrink-0 ${item === safePage ? 'bg-[#636b2f] text-white' : 'bg-white/5 text-white/40'}`}>
                       {item}
                     </button>
                 )}
             </div>
-            <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={safePage === totalPages}
-              className="size-7 flex items-center justify-center rounded-lg bg-white/5 text-white/40 disabled:opacity-20 active:scale-90 transition-all shrink-0">
+            <button onClick={() => goToPage(Math.min(totalPages, safePage + 1))} disabled={safePage === totalPages}
+              className="size-7 flex items-center justify-center rounded-lg bg-white/5 text-white/40 disabled:opacity-20 active:scale-90 shrink-0">
               <span className="material-symbols-outlined text-base">chevron_right</span>
             </button>
           </div>
@@ -188,8 +184,8 @@ const Home: React.FC<HomeProps> = ({
                     onError={(e) => {
                       const img = e.target as HTMLImageElement;
                       if (img.src.includes('uc?export=view')) {
-                        const idMatch = img.src.match(/id=([a-zA-Z0-9_-]+)/);
-                        if (idMatch) { img.src = `https://drive.google.com/thumbnail?id=${idMatch[1]}&sz=w1000`; return; }
+                        const m = img.src.match(/id=([a-zA-Z0-9_-]+)/);
+                        if (m) { img.src = `https://drive.google.com/thumbnail?id=${m[1]}&sz=w1000`; return; }
                       }
                       img.style.display = 'none';
                     }}
@@ -217,16 +213,16 @@ const Home: React.FC<HomeProps> = ({
         })}
       </div>
 
-      {/* Pagination controls — bottom */}
+      {/* Bottom pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-center gap-4 px-4 pb-8 pt-2">
-          <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={safePage === 1}
-            className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-white/5 text-white/50 disabled:opacity-20 active:scale-95 transition-all text-xs font-black uppercase tracking-widest">
+          <button onClick={() => goToPage(Math.max(1, safePage - 1))} disabled={safePage === 1}
+            className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-white/5 text-white/50 disabled:opacity-20 active:scale-95 text-xs font-black uppercase tracking-widest">
             <span className="material-symbols-outlined text-base">arrow_back</span>Prev
           </button>
           <span className="text-white/30 text-xs font-bold">{safePage} / {totalPages}</span>
-          <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={safePage === totalPages}
-            className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-[#636b2f] text-white disabled:opacity-20 active:scale-95 transition-all text-xs font-black uppercase tracking-widest">
+          <button onClick={() => goToPage(Math.min(totalPages, safePage + 1))} disabled={safePage === totalPages}
+            className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-[#636b2f] text-white disabled:opacity-20 active:scale-95 text-xs font-black uppercase tracking-widest">
             Next<span className="material-symbols-outlined text-base">arrow_forward</span>
           </button>
         </div>

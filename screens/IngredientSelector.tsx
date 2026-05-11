@@ -166,7 +166,8 @@ const IngredientSelector: React.FC<IngredientSelectorProps> = ({
         </div>
 
         {/* Updated Footer Position */}
-        <div className="absolute bottom-0 inset-x-0 p-6 bg-gradient-to-t from-[#1c1d15] via-[#1c1d15] to-transparent pt-16 pb-16 pointer-events-none z-20">
+        <div className="absolute bottom-0 inset-x-0 p-6 bg-gradient-to-t from-[#1c1d15] via-[#1c1d15] to-transparent pt-16 pointer-events-none z-20"
+          style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 1.5rem)' }}>
           <button 
             disabled={selectedCount === 0 || isSuccess}
             onClick={handleConfirm}
