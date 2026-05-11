@@ -16,7 +16,7 @@ interface HomeProps {
   recentCount?: number;
 }
 
-const RECIPES_PER_PAGE = 12;
+const RECIPES_PER_PAGE = 72;
 
 const Home: React.FC<HomeProps> = ({ 
   recipes = [], 
@@ -39,11 +39,8 @@ const Home: React.FC<HomeProps> = ({
     return [...recipes]
       .filter(recipe => {
         let matchesCategory = true;
-        if (activeCategory === 'Favorites') {
-          matchesCategory = likedIds.includes(recipe.id);
-        } else if (activeCategory !== 'All') {
-          matchesCategory = recipe.category === activeCategory;
-        }
+        if (activeCategory === 'Favorites') matchesCategory = likedIds.includes(recipe.id);
+        else if (activeCategory !== 'All') matchesCategory = recipe.category === activeCategory;
         const title = (recipe.title || '').toLowerCase();
         const desc = (recipe.description || '').toLowerCase();
         const query = searchQuery.toLowerCase();
@@ -52,20 +49,12 @@ const Home: React.FC<HomeProps> = ({
       .sort((a, b) => (a.title || '').localeCompare(b.title || ''));
   }, [recipes, activeCategory, searchQuery, likedIds]);
 
-  // Reset to page 1 when filter/search changes
   const totalPages = Math.max(1, Math.ceil(displayRecipes.length / RECIPES_PER_PAGE));
   const safePage = Math.min(currentPage, totalPages);
   const pagedRecipes = displayRecipes.slice((safePage - 1) * RECIPES_PER_PAGE, safePage * RECIPES_PER_PAGE);
 
-  const handleCategoryChange = (cat: string) => {
-    setActiveCategory(cat);
-    setCurrentPage(1);
-  };
-
-  const handleSearchChange = (q: string) => {
-    setSearchQuery(q);
-    setCurrentPage(1);
-  };
+  const handleCategoryChange = (cat: string) => { setActiveCategory(cat); setCurrentPage(1); };
+  const handleSearchChange = (q: string) => { setSearchQuery(q); setCurrentPage(1); };
 
   return (
     <div className="w-full min-h-screen bg-[#000000]">
@@ -151,108 +140,69 @@ const Home: React.FC<HomeProps> = ({
         </div>
       </div>
 
-      {/* Recipe count + page indicator — single line */}
-      <div className="flex items-center justify-between px-5 mb-4 gap-2">
-        <p className="text-white/30 text-[10px] font-black uppercase tracking-widest whitespace-nowrap shrink-0">
-          {displayRecipes.length} recipes • {safePage}/{totalPages}
-        </p>
-        {totalPages > 1 && (
+      {/* Pagination controls — top */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between px-5 mb-3 gap-2">
+          <p className="text-white/30 text-[10px] font-black uppercase tracking-widest whitespace-nowrap shrink-0">
+            {displayRecipes.length} recipes • {safePage}/{totalPages}
+          </p>
           <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
-            <button
-              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-              disabled={safePage === 1}
-              className="size-7 flex items-center justify-center rounded-lg bg-white/5 text-white/40 disabled:opacity-20 active:scale-90 transition-all shrink-0"
-            >
+            <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={safePage === 1}
+              className="size-7 flex items-center justify-center rounded-lg bg-white/5 text-white/40 disabled:opacity-20 active:scale-90 transition-all shrink-0">
               <span className="material-symbols-outlined text-base">chevron_left</span>
             </button>
-            {/* Scrollable page dots — shows current ±3 pages */}
-            <div className="flex items-center gap-1 overflow-x-auto no-scrollbar max-w-[180px]">
+            <div className="flex items-center gap-1 overflow-x-auto no-scrollbar max-w-[200px]">
               {Array.from({ length: totalPages }, (_, i) => i + 1)
-                .filter(p => Math.abs(p - safePage) <= 3 || p === 1 || p === totalPages)
+                .filter(p => Math.abs(p - safePage) <= 2 || p === 1 || p === totalPages)
                 .reduce<(number | 'gap')[]>((acc, p, idx, arr) => {
                   if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push('gap');
                   acc.push(p);
                   return acc;
                 }, [])
-                .map((item, idx) =>
-                  item === 'gap' ? (
-                    <span key={`gap-${idx}`} className="text-white/20 text-[10px] px-0.5">…</span>
-                  ) : (
-                    <button
-                      key={item}
-                      onClick={() => setCurrentPage(item as number)}
-                      className={`size-7 flex items-center justify-center rounded-lg text-[10px] font-black transition-all active:scale-90 shrink-0 ${
-                        item === safePage ? 'bg-[#636b2f] text-white' : 'bg-white/5 text-white/40'
-                      }`}
-                    >
+                .map((item, idx) => item === 'gap'
+                  ? <span key={`g${idx}`} className="text-white/20 text-[10px] px-0.5">…</span>
+                  : <button key={item} onClick={() => setCurrentPage(item as number)}
+                      className={`size-7 flex items-center justify-center rounded-lg text-[10px] font-black transition-all active:scale-90 shrink-0 ${item === safePage ? 'bg-[#636b2f] text-white' : 'bg-white/5 text-white/40'}`}>
                       {item}
                     </button>
-                  )
                 )}
             </div>
-            <button
-              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-              disabled={safePage === totalPages}
-              className="size-7 flex items-center justify-center rounded-lg bg-white/5 text-white/40 disabled:opacity-20 active:scale-90 transition-all shrink-0"
-            >
+            <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={safePage === totalPages}
+              className="size-7 flex items-center justify-center rounded-lg bg-white/5 text-white/40 disabled:opacity-20 active:scale-90 transition-all shrink-0">
               <span className="material-symbols-outlined text-base">chevron_right</span>
             </button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-5 mb-6 px-4">
         {pagedRecipes.map(recipe => {
           const isPinned = pinnedIds.includes(recipe.id);
           const finalImageUrl = formatImageUrl(recipe.imageUrl);
-          
           return (
-            <div 
-              key={recipe.id} 
-              className="flex flex-col gap-3 group cursor-pointer"
-              onClick={() => onRecipeSelect(recipe)}
-            >
+            <div key={recipe.id} className="flex flex-col gap-3 group cursor-pointer" onClick={() => onRecipeSelect(recipe)}>
               <div className="relative w-full aspect-square rounded-3xl shadow-2xl overflow-hidden border border-white/5 bg-[#1a1d14]">
                 {finalImageUrl ? (
-                  <img 
-                    src={finalImageUrl} 
-                    alt={recipe.title}
-                    referrerPolicy="no-referrer"
+                  <img src={finalImageUrl} alt={recipe.title} referrerPolicy="no-referrer"
                     className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                     onError={(e) => {
                       const img = e.target as HTMLImageElement;
                       if (img.src.includes('uc?export=view')) {
-                         const idMatch = img.src.match(/id=([a-zA-Z0-9_-]+)/);
-                         if (idMatch) {
-                           img.src = `https://drive.google.com/thumbnail?id=${idMatch[1]}&sz=w1000`;
-                           return;
-                         }
+                        const idMatch = img.src.match(/id=([a-zA-Z0-9_-]+)/);
+                        if (idMatch) { img.src = `https://drive.google.com/thumbnail?id=${idMatch[1]}&sz=w1000`; return; }
                       }
                       img.style.display = 'none';
                     }}
                   />
-                ) : null}
-                
-                {!finalImageUrl && (
+                ) : (
                   <div className="w-full h-full flex flex-col items-center justify-center bg-white/5 text-white/20">
                     <span className="material-symbols-outlined text-4xl mb-2">image_not_supported</span>
                     <span className="text-[10px] font-black uppercase tracking-widest">No Media</span>
                   </div>
                 )}
-                
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60"></div>
-                
-                <button 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onTogglePin(recipe.id);
-                  }}
-                  className={`absolute top-3 right-3 p-2 rounded-full backdrop-blur-xl border active:scale-90 transition-all flex items-center justify-center shadow-lg ${
-                    isPinned 
-                      ? 'bg-[#636b2f] border-[#636b2f] text-white' 
-                      : 'bg-black/40 border-white/10 text-white'
-                  }`}
-                >
+                <button onClick={(e) => { e.stopPropagation(); onTogglePin(recipe.id); }}
+                  className={`absolute top-3 right-3 p-2 rounded-full backdrop-blur-xl border active:scale-90 transition-all flex items-center justify-center shadow-lg ${isPinned ? 'bg-[#636b2f] border-[#636b2f] text-white' : 'bg-black/40 border-white/10 text-white'}`}>
                   <span className="material-symbols-outlined text-base">push_pin</span>
                 </button>
               </div>
@@ -266,6 +216,21 @@ const Home: React.FC<HomeProps> = ({
           );
         })}
       </div>
+
+      {/* Pagination controls — bottom */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-4 px-4 pb-8 pt-2">
+          <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={safePage === 1}
+            className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-white/5 text-white/50 disabled:opacity-20 active:scale-95 transition-all text-xs font-black uppercase tracking-widest">
+            <span className="material-symbols-outlined text-base">arrow_back</span>Prev
+          </button>
+          <span className="text-white/30 text-xs font-bold">{safePage} / {totalPages}</span>
+          <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={safePage === totalPages}
+            className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-[#636b2f] text-white disabled:opacity-20 active:scale-95 transition-all text-xs font-black uppercase tracking-widest">
+            Next<span className="material-symbols-outlined text-base">arrow_forward</span>
+          </button>
+        </div>
+      )}
 
     </div>
   );

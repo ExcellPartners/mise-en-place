@@ -212,7 +212,7 @@ const ShoppingList: React.FC<ShoppingListProps> = ({
         {/* Clear Button */}
         <div className="px-4 mb-4 flex justify-end relative z-20">
           <button 
-            onClick={(e) => { e.stopPropagation(); setShowClearConfirm(true); }}
+            onClick={() => setShowClearConfirm(true)}
             className="text-red-500/60 text-[10px] font-black uppercase tracking-widest px-4 py-2 hover:text-red-500 transition-colors bg-white/5 rounded-lg active:bg-white/10 border border-white/5"
           >
             Clear Itinerary
@@ -310,41 +310,41 @@ const ShoppingList: React.FC<ShoppingListProps> = ({
         })}
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 z-[90] px-4 pb-[88px] pt-3 bg-gradient-to-t from-[#000000] via-[#000000]/90 to-transparent pointer-events-none">
+      {/* Checkout button — sits above nav bar */}
+      <div className="fixed bottom-0 left-0 right-0 z-[90] px-4 pt-3 bg-gradient-to-t from-[#000000] via-[#000000]/95 to-transparent"
+        style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 84px)' }}>
         <button
           onClick={() => onCheckout?.(neededItems)}
           disabled={completedCount === 0}
-          className="w-full pointer-events-auto bg-[#636b2f] disabled:opacity-30 text-white font-black py-4 rounded-2xl flex items-center justify-center gap-3 shadow-2xl shadow-[#636b2f]/20 active:scale-[0.98] transition-all text-base uppercase tracking-widest"
+          className="w-full bg-[#636b2f] disabled:opacity-30 text-white font-black py-4 rounded-2xl flex items-center justify-center gap-3 shadow-2xl shadow-[#636b2f]/20 active:scale-[0.98] transition-all text-base uppercase tracking-widest"
         >
           <span className="material-symbols-outlined">shopping_cart_checkout</span>
           <span>Checkout Trip ({completedCount} Items)</span>
         </button>
       </div>
-      {/* Themed clear confirmation — no ugly browser dialog */}
+
+      {/* Themed clear confirmation — slides down from top near the Clear button */}
       {showClearConfirm && (
-        <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-lg mx-4 mb-8 bg-[#2a2c21] rounded-3xl border border-white/10 shadow-2xl overflow-hidden animate-in slide-in-from-bottom duration-200">
+        <div className="fixed inset-0 z-[200] bg-black/50 backdrop-blur-sm" onClick={() => setShowClearConfirm(false)}>
+          <div className="absolute top-36 left-4 right-4 bg-[#2a2c21] rounded-3xl border border-white/10 shadow-2xl overflow-hidden"
+            onClick={e => e.stopPropagation()}>
             <div className="p-6">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="size-10 rounded-xl bg-red-500/20 flex items-center justify-center shrink-0">
-                  <span className="material-symbols-outlined text-red-400">delete_sweep</span>
+              <div className="flex items-center gap-3 mb-2">
+                <div className="size-9 rounded-xl bg-red-500/20 flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-red-400 text-lg">delete_sweep</span>
                 </div>
-                <h3 className="text-white font-black text-lg">Clear Shopping List?</h3>
+                <h3 className="text-white font-black text-base">Clear Shopping List?</h3>
               </div>
-              <p className="text-[#b6baa1] text-sm leading-relaxed">This will remove all items from your current trip. This can't be undone.</p>
+              <p className="text-[#b6baa1] text-sm leading-relaxed ml-12">Removes all items from your current trip.</p>
             </div>
             <div className="flex border-t border-white/10">
-              <button
-                onClick={() => setShowClearConfirm(false)}
-                className="flex-1 py-4 text-white/60 font-bold text-sm active:bg-white/5 transition-colors"
-              >
+              <button onClick={() => setShowClearConfirm(false)}
+                className="flex-1 py-4 text-white/60 font-bold text-sm active:bg-white/5 transition-colors">
                 Cancel
               </button>
               <div className="w-px bg-white/10"></div>
-              <button
-                onClick={() => { onClearList?.(); setShowClearConfirm(false); }}
-                className="flex-1 py-4 text-red-400 font-black text-sm active:bg-red-500/10 transition-colors"
-              >
+              <button onClick={() => { onClearList?.(); setShowClearConfirm(false); }}
+                className="flex-1 py-4 text-red-400 font-black text-sm active:bg-red-500/10 transition-colors">
                 Clear List
               </button>
             </div>
