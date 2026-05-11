@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "com.excellpartners.miseenplace",
+        "sha256_cert_fingerprints": ["57:8A:1A:AA:0C:B4:26:B2:09:5F:42:D0:DF:63:99:26:31:D9:E0:78:90:8C:D8:B0:4D:5A:2B:ED:3A:C9:22:21"]
+      }
+    }]
