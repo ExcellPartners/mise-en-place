@@ -508,35 +508,15 @@ const Planner: React.FC<PlannerProps> = ({
       )}
 
       {selectorData && (
-        <div className="fixed inset-0 z-[300] flex flex-col justify-end">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setSelectorData(null)} />
-          <div className="relative w-full flex flex-col">
-            <div className="bg-[#2a2c21] border-t border-white/10 px-6 py-3 flex items-center justify-between rounded-t-3xl">
-              <p className="text-white/50 text-xs font-black uppercase tracking-widest">Adjust Servings</p>
-              <div className="flex items-center bg-[#1c1d15] rounded-xl p-1 border border-white/5">
-                <button
-                  onClick={() => setSelectorData(prev => prev ? { ...prev, servings: Math.max(1, prev.servings - 1) } : null)}
-                  className="size-8 flex items-center justify-center text-[#636b2f] active:scale-90 transition-transform">
-                  <span className="material-symbols-outlined text-xl">remove</span>
-                </button>
-                <span className="px-3 font-black text-white min-w-[44px] text-center text-sm">{selectorData.servings}x</span>
-                <button
-                  onClick={() => setSelectorData(prev => prev ? { ...prev, servings: prev.servings + 1 } : null)}
-                  className="size-8 flex items-center justify-center text-[#636b2f] active:scale-90 transition-transform">
-                  <span className="material-symbols-outlined text-xl">add</span>
-                </button>
-              </div>
-            </div>
-            <IngredientSelector
-              recipe={selectorData.recipe}
-              servings={selectorData.servings}
-              pantry={pantry}
-              shoppingList={shoppingList}
-              onClose={() => setSelectorData(null)}
-              onConfirm={(ingredients) => { onAddToShopping?.(ingredients); setSelectorData(null); showThemedToast(`${ingredients.length} items added to trip`); }}
-            />
-          </div>
-        </div>
+        <IngredientSelector
+          recipe={selectorData.recipe}
+          servings={selectorData.servings}
+          pantry={pantry}
+          shoppingList={shoppingList}
+          onClose={() => setSelectorData(null)}
+          onServingsChange={(s) => setSelectorData(prev => prev ? { ...prev, servings: s } : null)}
+          onConfirm={(ingredients) => { onAddToShopping?.(ingredients); setSelectorData(null); showThemedToast(`${ingredients.length} items added to trip`); }}
+        />
       )}
     </div>
   );

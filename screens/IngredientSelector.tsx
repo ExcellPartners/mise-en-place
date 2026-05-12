@@ -11,6 +11,7 @@ interface IngredientSelectorProps {
   shoppingList?: RawShoppingEntry[];
   onClose: () => void;
   onConfirm: (selectedIngredients: RecipeIngredient[]) => void;
+  onServingsChange?: (s: number) => void;
 }
 
 const IngredientSelector: React.FC<IngredientSelectorProps> = ({ 
@@ -19,7 +20,8 @@ const IngredientSelector: React.FC<IngredientSelectorProps> = ({
   pantry, 
   shoppingList = [],
   onClose, 
-  onConfirm 
+  onConfirm,
+  onServingsChange
 }) => {
   const scaled = useMemo(() => scaleIngredients(recipe, servings), [recipe, servings]);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -100,7 +102,7 @@ const IngredientSelector: React.FC<IngredientSelectorProps> = ({
         onClick={onClose}
       ></div>
 
-      <div className="relative w-full max-w-[480px] bg-[#1c1d15] rounded-t-[2.5rem] shadow-2xl border-t border-white/5 flex flex-col max-h-[90vh] animate-in slide-in-from-bottom duration-300 overflow-hidden pb-8">
+      <div className="relative w-full bg-[#1c1d15] rounded-t-[2.5rem] shadow-2xl border-t border-white/5 flex flex-col max-h-[90vh] animate-in slide-in-from-bottom duration-300 overflow-hidden pb-8">
         <div className="flex flex-col items-center pt-3 pb-2 cursor-pointer" onClick={onClose}>
           <div className="h-1.5 w-12 rounded-full bg-[#3b3e2e]"></div>
         </div>
@@ -110,6 +112,24 @@ const IngredientSelector: React.FC<IngredientSelectorProps> = ({
             <h2 className="text-white text-2xl font-black leading-tight tracking-tight font-display">Check Inventory</h2>
             <button onClick={onClose} className="text-[#b6baa1] text-xs font-black uppercase tracking-widest pt-1">Cancel</button>
           </div>
+
+          {/* Servings scaler — only shows if parent passed onServingsChange */}
+          {onServingsChange && (
+            <div className="flex items-center justify-between mt-3 bg-white/5 rounded-2xl px-4 py-2.5 border border-white/5">
+              <p className="text-white/50 text-xs font-black uppercase tracking-widest">Servings</p>
+              <div className="flex items-center bg-[#1c1d15] rounded-xl p-1 border border-white/10">
+                <button onClick={() => onServingsChange(Math.max(1, servings - 1))}
+                  className="size-8 flex items-center justify-center text-[#636b2f] active:scale-90 transition-transform">
+                  <span className="material-symbols-outlined text-xl">remove</span>
+                </button>
+                <span className="px-3 font-black text-white min-w-[44px] text-center text-sm">{servings}×</span>
+                <button onClick={() => onServingsChange(servings + 1)}
+                  className="size-8 flex items-center justify-center text-[#636b2f] active:scale-90 transition-transform">
+                  <span className="material-symbols-outlined text-xl">add</span>
+                </button>
+              </div>
+            </div>
+          )}
           <div className="mt-3 flex items-center justify-between">
             <div className="flex items-center gap-2 bg-primary/10 border border-primary/20 w-fit px-4 py-1.5 rounded-xl">
               <span className="material-symbols-outlined text-primary text-sm fill-1">restaurant</span>
@@ -166,8 +186,7 @@ const IngredientSelector: React.FC<IngredientSelectorProps> = ({
         </div>
 
         {/* Updated Footer Position */}
-        <div className="absolute bottom-0 inset-x-0 p-6 bg-gradient-to-t from-[#1c1d15] via-[#1c1d15] to-transparent pt-16 pointer-events-none z-20"
-          style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 1.5rem)' }}>
+        <div className="absolute bottom-0 inset-x-0 p-6 bg-gradient-to-t from-[#1c1d15] via-[#1c1d15] to-transparent pt-16 pb-16 pointer-events-none z-20">
           <button 
             disabled={selectedCount === 0 || isSuccess}
             onClick={handleConfirm}
