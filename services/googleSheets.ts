@@ -29,7 +29,7 @@ export async function fetchFullAppData(
   const targetId = spreadsheetId || HARDCODED_SPREADSHEET_ID;
   try {
     const fetchTab = async (tabName: string) => {
-      const range = `${tabName}!A2:Z3000`; 
+      const range = `${tabName}!A2:Z10000`; 
       const url = `${GOOGLE_SHEETS_API_BASE}/${targetId}/values/${range}?key=${GOOGLE_API_KEY}`;
       const response = await fetch(url);
       if (!response.ok) return null;
