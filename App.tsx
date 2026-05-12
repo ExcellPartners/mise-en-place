@@ -117,8 +117,6 @@ const App: React.FC = () => {
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [timerState, setTimerState] = useState<GlobalTimerState>({ remainingSeconds: 300, isRunning: false, targetTimestamp: null, originalDuration: 300 });
   const [toastState, setToastState] = useState({ message: '', visible: false });
-  const [navDirection, setNavDirection] = useState<'forward' | 'back' | 'root'>('root');
-  const [screenKey, setScreenKey] = useState(0);
 
   // Swipe Gesture State
   const [touchStart, setTouchStart] = useState<number | null>(null);
@@ -140,12 +138,26 @@ const App: React.FC = () => {
     const activeView = viewStack[viewStack.length - 1];
     
     if (activeView === 'recipes') {
-      // Restore scroll position when returning to recipes
-      mainRef.current.scrollTop = recipesScrollRef.current;
-    } else {
-      // Ensure other views start at the top
+      const savedPos = recipesScrollRef.current;
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          if (mainRef.current) mainRef.current.scrollTop = savedPos;
+        }, 0);
+      });
+    } else if (activeView === 'recipeDetail') {
+      // Use multiple deferred resets — content painting pushes scroll down
       mainRef.current.scrollTop = 0;
-      // Double check: Force scroll to top on next tick to override any browser restoration behavior on the same DOM element
+      requestAnimationFrame(() => {
+        if (mainRef.current) mainRef.current.scrollTop = 0;
+        setTimeout(() => {
+          if (mainRef.current) mainRef.current.scrollTop = 0;
+        }, 50);
+        setTimeout(() => {
+          if (mainRef.current) mainRef.current.scrollTop = 0;
+        }, 150);
+      });
+    } else {
+      mainRef.current.scrollTop = 0;
       setTimeout(() => {
         if (mainRef.current) mainRef.current.scrollTop = 0;
       }, 0);
@@ -174,22 +186,17 @@ const App: React.FC = () => {
   useEffect(() => { if (isAuthenticated && isProfileComplete) triggerSync(); }, [isAuthenticated, isProfileComplete]);
 
   const handleBack = () => {
-    setNavDirection('back');
-    setScreenKey(k => k + 1);
     if (viewStack.length <= 1) setViewStack(['recipes']);
     else setViewStack(prev => prev.slice(0, -1));
   };
 
-  const navigateTo = (view: View) => {
-    setNavDirection('forward');
-    setScreenKey(k => k + 1);
-    setViewStack(prev => [...prev, view]);
-  };
+  const navigateTo = (view: View) => setViewStack(prev => [...prev, view]);
   
   const resetToView = (view: View) => {
-    setNavDirection('root');
-    setScreenKey(k => k + 1);
-    if (view === 'recipes') recipesScrollRef.current = 0;
+    // If explicitly tapping the Home tab, reset scroll to top
+    if (view === 'recipes') {
+      recipesScrollRef.current = 0;
+    }
     setViewStack([view]);
   };
 
@@ -436,8 +443,6 @@ const App: React.FC = () => {
       onRecipeSelect={(r) => { setSelectedRecipe(r); navigateTo('recipeDetail'); }}
       recentCount={recentCookedCount}
       onPlannerOpen={() => navigateTo('planner')}
-      pantry={pantry}
-      cookedHistory={cookedHistory}
     />;
 
     if (currentView === 'planner') return <Planner 
@@ -579,7 +584,7 @@ const App: React.FC = () => {
     >
       <Toast message={toastState.message} isVisible={toastState.visible} />
       {isLoading && <SplashScreen progress={loadingProgress} />}
-      <main ref={mainRef} key={screenKey} className={`flex-1 overflow-y-auto no-scrollbar pb-24 ${navDirection === 'forward' ? 'screen-enter' : navDirection === 'back' ? 'screen-back' : 'screen-fade'}`}>{renderView()}</main>
+      <main ref={mainRef} className="flex-1 overflow-y-auto no-scrollbar pb-24">{renderView()}</main>
 
       {isAuthenticated && isProfileComplete && !['login', 'onboarding', 'cookingMode', 'scanRecipe', 'addRecipeManual'].includes(viewStack[viewStack.length - 1]) && (
         <nav className="fixed bottom-0 left-0 right-0 bg-[#0a0c0a]/95 backdrop-blur-xl border-t border-gray-800 z-[100] nav-safe-pb">
