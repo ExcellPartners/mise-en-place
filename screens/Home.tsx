@@ -38,7 +38,7 @@ const Home: React.FC<HomeProps> = ({
         if (activeCategory === 'Favorites') {
           matchesCategory = likedIds.includes(recipe.id);
         } else if (activeCategory === 'Beverages') {
-          matchesCategory = recipe.category === 'Beverages' || recipe.category === 'Cocktail';
+          matchesCategory = recipe.category === 'Beverages' || recipe.category === 'Beverage' || recipe.category === 'Cocktail';
         } else if (activeCategory !== 'All') {
           matchesCategory = recipe.category === activeCategory;
         }
