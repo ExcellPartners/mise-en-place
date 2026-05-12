@@ -315,7 +315,8 @@ const RecipeDetail: React.FC<RecipeDetailProps> = ({
         )}
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-background-dark via-background-dark/95 to-transparent pt-12 z-50 no-print">
+      <div className="fixed bottom-0 left-0 right-0 px-6 pt-6 bg-gradient-to-t from-background-dark via-background-dark/95 to-transparent z-50 no-print"
+        style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 84px)' }}>
         <div className="flex gap-3">
           <button 
             onClick={() => onAddToPlanner(recipe.id, servings)}
