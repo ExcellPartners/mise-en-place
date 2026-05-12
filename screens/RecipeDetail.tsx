@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Recipe, PantryItem } from '../types';
 import { scaleIngredients, formatImageUrl } from '../utils/logic';
 import PrintPreview from './PrintPreview';
@@ -63,10 +63,15 @@ const RecipeDetail: React.FC<RecipeDetailProps> = ({
     setIsDeleteModalOpen(false);
   };
 
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+  }, [recipe.id]);
+
   const finalHeroUrl = formatImageUrl(recipe.imageUrl);
 
   return (
-    <div className="min-h-screen flex flex-col bg-background-dark overflow-x-hidden pb-32 relative">
+    <div ref={scrollRef} className="min-h-screen flex flex-col bg-background-dark overflow-x-hidden pb-32 relative">
       <div 
         className="fixed left-0 right-0 z-50 flex items-center justify-between p-4 bg-transparent no-print header-safe-pt"
       >
@@ -283,9 +288,34 @@ const RecipeDetail: React.FC<RecipeDetailProps> = ({
              </p>
           </div>
         )}
+
+        {/* Source section — only shows if any source data exists */}
+        {(recipe.sourceName || recipe.sourceAuthor || recipe.sourceUrl) && (
+          <div className="mt-6 p-6 rounded-[2rem] bg-white/3 border border-white/8 flex flex-col gap-3">
+            <div className="flex items-center gap-2 text-white/40">
+              <span className="material-symbols-outlined text-lg">menu_book</span>
+              <span className="text-[10px] font-black uppercase tracking-[0.2em]">Source</span>
+            </div>
+            {recipe.sourceName && (
+              <p className="text-white font-bold text-sm leading-snug">{recipe.sourceName}</p>
+            )}
+            {recipe.sourceAuthor && (
+              <p className="text-white/50 text-xs font-medium">by {recipe.sourceAuthor}</p>
+            )}
+            {recipe.sourceUrl && (
+              <a href={recipe.sourceUrl} target="_blank" rel="noopener noreferrer"
+                className="mt-1 flex items-center gap-2 text-[#636b2f] text-xs font-black uppercase tracking-widest active:opacity-70 transition-opacity"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <span className="material-symbols-outlined text-base">open_in_new</span>
+                {recipe.sourceAuthor ? 'View Book' : 'Visit Website'}
+              </a>
+            )}
+          </div>
+        )}
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-background-dark via-background-dark/95 to-transparent pt-12 z-50 max-w-[480px] mx-auto no-print">
+      <div className="fixed bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-background-dark via-background-dark/95 to-transparent pt-12 z-50 no-print">
         <div className="flex gap-3">
           <button 
             onClick={() => onAddToPlanner(recipe.id, servings)}
