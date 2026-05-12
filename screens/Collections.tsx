@@ -1,12 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { Recipe, PantryItem } from '../types';
+import { Recipe } from '../types';
 import { formatImageUrl } from '../utils/logic';
-
-interface CookedEntry {
-  date: string;
-  recipeId: string;
-  recipeName: string;
-}
 
 interface CollectionsProps {
   recipes: Recipe[];
@@ -14,8 +8,6 @@ interface CollectionsProps {
   onRecipeSelect: (recipe: Recipe) => void;
   onPlannerOpen: () => void;
   recentCount: number;
-  cookedHistory?: CookedEntry[];
-  pantry?: PantryItem[];
 }
 
 interface CollectionItem {
@@ -167,48 +159,12 @@ const Collections: React.FC<CollectionsProps> = ({
   onBack, 
   onRecipeSelect,
   onPlannerOpen,
-  recentCount,
-  cookedHistory = [],
-  pantry = []
+  recentCount
 }) => {
+  // State to track if we are viewing the main dashboard or a specific sub-collection
   const [selectedTheme, setSelectedTheme] = useState<CollectionItem | null>(null);
-  const [activeSection, setActiveSection] = useState<'collections' | 'history' | 'almostThere'>('collections');
-  const [almostThereCategory, setAlmostThereCategory] = useState('All');
 
-  const RECIPE_CATEGORIES = ['All', 'Main', 'Side', 'Whole Meal', 'Appetizer', 'Breakfast', 'Dessert', 'Cocktail'];
-
-  const moneySaved = recentCount * 8;
-
-  // Almost There — recipes missing 3 or fewer in-stock ingredients
-  const almostThereRecipes = useMemo(() => {
-    if (pantry.length === 0) return [];
-
-    // Use both inStock flag AND quantity > 0 as fallback (handles sheet sync timing)
-    const inStockNames = new Set(
-      pantry
-        .filter(p => !p.isExpired && ((p.inStock && (p.quantity ?? 0) > 0) || (!p.isExpired && (p.quantity ?? 0) > 0)))
-        .map(p => p.name.toLowerCase().trim())
-    );
-
-    return recipes
-      .filter(r => r.ingredients && r.ingredients.length > 0)
-      .filter(r => almostThereCategory === 'All' || r.category === almostThereCategory)
-      .map(recipe => {
-        const missing = recipe.ingredients.filter(
-          ing => ing.name && !inStockNames.has(ing.name.toLowerCase().trim())
-        );
-        return { recipe, missingCount: missing.length, missingNames: missing.map(i => i.name) };
-      })
-      .filter(r => r.missingCount > 0 && r.missingCount <= 3)
-      .sort((a, b) => a.missingCount - b.missingCount)
-      .slice(0, 20);
-  }, [recipes, pantry, almostThereCategory]);
-
-  // Cooked history sorted newest first
-  const sortedHistory = useMemo(() => 
-    [...cookedHistory].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 50),
-    [cookedHistory]
-  );
+  const moneySaved = recentCount * 8; // Avg savings
 
   // Filter logic for specific themes
   const filteredRecipes = useMemo(() => {
@@ -223,7 +179,7 @@ const Collections: React.FC<CollectionsProps> = ({
         case 'sunday-prep': return r.baseServings >= 6 || text.includes('batch') || text.includes('prep');
         case 'table-two': return r.baseServings === 2 || text.includes('steak') || text.includes('risotto') || text.includes('date');
         case 'pantry': return text.includes('pasta') || text.includes('bean') || text.includes('canned') || text.includes('rice');
-        case 'social': return r.category === 'Appetizer' || r.category === 'Cocktail' || r.category === 'Snack' || text.includes('dip');
+        case 'social': return r.category === 'Appetizer' || r.category === 'Beverages' || r.category === 'Beverage' || r.category === 'Cocktail' || r.category === 'Snack' || text.includes('dip');
         case '30-min': return (r.prepTime + r.cookTime) <= 35;
         
         // Global Gallery
@@ -339,177 +295,62 @@ const Collections: React.FC<CollectionsProps> = ({
         <div className="w-10"></div>
       </header>
 
-      {/* Section tabs */}
-      <div className="sticky top-[60px] z-10 px-4 pt-3 pb-1 bg-[#000000]/95 backdrop-blur-md border-b border-white/5">
-        <div className="flex gap-2 p-1 bg-white/5 rounded-2xl">
-          {([
-            { id: 'collections', label: 'Collections', icon: 'collections_bookmark' },
-            { id: 'almostThere', label: 'Almost There', icon: 'kitchen' },
-            { id: 'history', label: 'History', icon: 'history' },
-          ] as const).map(tab => (
-            <button key={tab.id} onClick={() => setActiveSection(tab.id)}
-              className={`flex-1 flex flex-col items-center py-2 rounded-xl transition-all gap-0.5 ${activeSection === tab.id ? 'bg-[#636b2f] text-white' : 'text-white/40'}`}
-            >
-              <span className="material-symbols-outlined text-lg">{tab.icon}</span>
-              <span className="text-[8px] font-black uppercase tracking-widest">{tab.label}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-
       <main className="flex-1 pb-32 overflow-y-auto no-scrollbar">
-
-        {/* ── Collections tab ── */}
-        {activeSection === 'collections' && (
-          <>
-            <section className="px-4 pt-6 pb-8">
-              <div className="flex flex-col gap-4 rounded-3xl bg-[#1c1d15] p-6 shadow-2xl border border-white/5 relative overflow-hidden">
-                <div className="flex flex-col gap-1.5 relative z-10">
-                  <p className="text-white text-lg font-black leading-tight">Last 30 Days Recap</p>
-                  <p className="text-[#b6baa1] text-sm font-medium leading-relaxed">
-                    You cooked <span className="text-white font-bold">{recentCount} meals</span> this month, saving approx. <span className="text-[#636b2f] font-bold">${moneySaved}</span> vs. dining out.
-                  </p>
-                </div>
-                <button onClick={onPlannerOpen} className="flex items-center justify-center rounded-full h-11 px-8 bg-[#3b3e2e] text-white gap-2 text-xs font-black uppercase tracking-widest active:scale-95 w-fit relative z-10">
-                  <span>View Planner</span>
-                  <span className="material-symbols-outlined text-sm">arrow_forward</span>
-                </button>
-                <div className="absolute top-0 right-0 w-32 h-32 bg-[#636b2f]/10 rounded-full blur-3xl -mr-16 -mt-16"></div>
-              </div>
-            </section>
-            <section className="mb-8">
-              <div className="px-4 mb-3">
-                <h2 className="text-xl font-black text-white tracking-tight">The Lifestyle Lab</h2>
-                <p className="text-[10px] font-bold uppercase text-[#636b2f] tracking-widest mt-1 opacity-80">Solving your "Right Now" reality</p>
-              </div>
-              {renderCollectionCards(COLLECTIONS_DATA.lifestyle)}
-            </section>
-            <section className="mb-8">
-              <div className="px-4 mb-3">
-                <h2 className="text-xl font-black text-white tracking-tight">The Global Gallery</h2>
-                <p className="text-[10px] font-bold uppercase text-[#636b2f] tracking-widest mt-1 opacity-80">Enjoy a taste around the world</p>
-              </div>
-              {renderCollectionCards(COLLECTIONS_DATA.global)}
-            </section>
-            <section className="mb-8">
-              <div className="px-4 mb-3">
-                <h2 className="text-xl font-black text-white tracking-tight">The Seasonal Suite</h2>
-                <p className="text-[10px] font-bold uppercase text-[#636b2f] tracking-widest mt-1 opacity-80">A recipe perfect for anytime of the year</p>
-              </div>
-              {renderCollectionCards(COLLECTIONS_DATA.seasonal)}
-            </section>
-          </>
-        )}
-
-        {/* ── Almost There tab ── */}
-        {activeSection === 'almostThere' && (
-          <div className="px-4 pt-6">
-            <div className="mb-4">
-              <h2 className="text-xl font-black text-white tracking-tight mb-1">Almost There</h2>
-              <p className="text-[#b6baa1] text-sm font-medium">Recipes you can make with just a few more ingredients.</p>
+        
+        {/* RECAP BLOCK - Moved from Home */}
+        <section className="px-4 pt-6 pb-8">
+          <h2 className="text-sm font-black text-white tracking-widest uppercase mb-4 px-1 text-[#636b2f] opacity-80">Insight</h2>
+          <div className="flex flex-col gap-4 rounded-3xl bg-[#1c1d15] p-6 shadow-2xl border border-white/5 relative overflow-hidden group">
+            <div className="flex flex-col gap-1.5 relative z-10">
+              <p className="text-white text-lg font-black leading-tight">Last 30 Days Recap</p>
+              <p className="text-[#b6baa1] text-sm font-medium leading-relaxed">
+                You cooked <span className="text-white font-bold">{recentCount} meals</span> this month, potentially saving <span className="text-[#636b2f] font-bold">${moneySaved}</span> vs. dining out.
+              </p>
             </div>
-
-            {/* Category filter pills */}
-            <div className="flex gap-2 overflow-x-auto no-scrollbar pb-4 -mx-4 px-4">
-              {RECIPE_CATEGORIES.map(cat => (
-                <button
-                  key={cat}
-                  onClick={() => setAlmostThereCategory(cat)}
-                  className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all flex-shrink-0 ${
-                    almostThereCategory === cat
-                      ? 'bg-[#636b2f] text-white'
-                      : 'bg-white/5 text-gray-400 border border-white/10'
-                  }`}
-                >
-                  {cat}
-                </button>
-              ))}
-            </div>
-            {pantry.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-24 text-center opacity-40 px-8">
-                <span className="material-symbols-outlined text-6xl mb-4">sync</span>
-                <p className="font-bold text-xl mb-2">Sync needed</p>
-                <p className="text-sm">Pull latest data from Google Sheets to see what you can almost make.</p>
-              </div>
-            ) : recipes.filter(r => r.ingredients?.length > 0).length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-24 text-center opacity-40 px-8">
-                <span className="material-symbols-outlined text-6xl mb-4">receipt_long</span>
-                <p className="font-bold text-xl mb-2">No recipe ingredients loaded</p>
-                <p className="text-sm">Make sure your Components tab is synced correctly in Google Sheets.</p>
-              </div>
-            ) : almostThereRecipes.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-24 text-center opacity-40 px-8">
-                <span className="material-symbols-outlined text-6xl mb-4">check_circle</span>
-                <p className="font-bold text-xl mb-2">You're well stocked!</p>
-                <p className="text-sm">No recipes are missing 3 or fewer ingredients right now.</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 gap-3">
-                {almostThereRecipes.map(({ recipe, missingCount, missingNames }, idx) => (
-                  <div key={recipe.id} onClick={() => onRecipeSelect(recipe)}
-                    className="flex gap-4 p-3 bg-[#1c1d15] rounded-2xl border border-white/5 active:scale-[0.98] transition-transform relative overflow-hidden"
-                  >
-                    {idx === 0 && <div className="absolute top-3 right-3 bg-[#636b2f] px-2 py-0.5 rounded-full"><span className="text-[8px] font-black uppercase tracking-widest text-white">Best Match</span></div>}
-                    <div className="w-20 h-20 rounded-xl overflow-hidden shrink-0 bg-white/5">
-                      <img src={formatImageUrl(recipe.imageUrl)} className="w-full h-full object-cover" alt={recipe.title} onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                    </div>
-                    <div className="flex flex-col justify-center flex-1 min-w-0 py-1">
-                      <span className="text-[#636b2f] text-[9px] font-black uppercase tracking-widest mb-1">{recipe.category}</span>
-                      <h3 className="text-white font-bold text-base leading-tight mb-1.5 line-clamp-1 pr-16">{recipe.title}</h3>
-                      <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full w-fit ${missingCount === 1 ? 'bg-emerald-500/20 border border-emerald-500/30' : missingCount === 2 ? 'bg-amber-500/20 border border-amber-500/30' : 'bg-orange-500/20 border border-orange-500/30'}`}>
-                        <span className={`material-symbols-outlined text-sm ${missingCount === 1 ? 'text-emerald-400' : missingCount === 2 ? 'text-amber-400' : 'text-orange-400'}`}>shopping_cart</span>
-                        <span className={`text-[9px] font-black uppercase tracking-widest ${missingCount === 1 ? 'text-emerald-400' : missingCount === 2 ? 'text-amber-400' : 'text-orange-400'}`}>
-                          Need {missingCount}: {missingNames.slice(0, 2).join(', ')}{missingNames.length > 2 ? '…' : ''}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+            <button 
+              onClick={onPlannerOpen}
+              className="flex min-w-[120px] cursor-pointer items-center justify-center rounded-full h-11 px-8 bg-[#3b3e2e] text-white gap-2 text-xs font-black uppercase tracking-widest hover:bg-[#4a4d3a] transition-all active:scale-95 w-fit relative z-10"
+            >
+              <span>View Planner</span>
+              <span className="material-symbols-outlined text-sm">arrow_forward</span>
+            </button>
+            <div className="absolute top-0 right-0 w-32 h-32 bg-[#636b2f]/10 rounded-full blur-3xl -mr-16 -mt-16"></div>
+            <div className="absolute bottom-0 left-0 w-24 h-24 bg-[#636b2f]/5 rounded-full blur-2xl -ml-12 -mb-12"></div>
           </div>
-        )}
+        </section>
 
-        {/* ── History tab ── */}
-        {activeSection === 'history' && (
-          <div className="px-4 pt-6">
-            <div className="mb-6">
-              <h2 className="text-xl font-black text-white tracking-tight mb-1">Cooked History</h2>
-              <p className="text-[#b6baa1] text-sm font-medium">Every recipe you've made, in order.</p>
-            </div>
-            {sortedHistory.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-24 text-center opacity-40 px-8">
-                <span className="material-symbols-outlined text-6xl mb-4">history</span>
-                <p className="font-bold text-xl mb-2">No history yet</p>
-                <p className="text-sm">Mark recipes as Cooked in the Planner and they'll appear here.</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {sortedHistory.map((entry, idx) => {
-                  const recipe = recipes.find(r => r.id === entry.recipeId);
-                  const dateStr = entry.date ? new Date(entry.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Unknown date';
-                  return (
-                    <div key={`${entry.recipeId}-${idx}`} onClick={() => recipe && onRecipeSelect(recipe)}
-                      className={`flex gap-4 p-3 bg-[#1c1d15] rounded-2xl border border-white/5 transition-transform ${recipe ? 'active:scale-[0.98] cursor-pointer' : 'opacity-60'}`}
-                    >
-                      <div className="w-16 h-16 rounded-xl overflow-hidden shrink-0 bg-white/5">
-                        {recipe ? <img src={formatImageUrl(recipe.imageUrl)} className="w-full h-full object-cover" alt={recipe.title} onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} /> : <div className="w-full h-full flex items-center justify-center"><span className="material-symbols-outlined text-white/20 text-2xl">restaurant</span></div>}
-                      </div>
-                      <div className="flex flex-col justify-center flex-1 min-w-0">
-                        <p className="text-white font-bold text-base leading-tight line-clamp-1">{entry.recipeName}</p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="material-symbols-outlined text-[#636b2f] text-sm">calendar_today</span>
-                          <span className="text-[#636b2f] text-[10px] font-black uppercase tracking-widest">{dateStr}</span>
-                        </div>
-                      </div>
-                      {recipe && <div className="flex items-center shrink-0"><span className="material-symbols-outlined text-white/20 text-xl">chevron_right</span></div>}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+        {/* 1. The Lifestyle Lab */}
+        <section className="mb-8">
+          <div className="px-4 mb-3">
+            <h2 className="text-xl font-black text-white tracking-tight">The Lifestyle Lab</h2>
+            <p className="text-[10px] font-bold uppercase text-[#636b2f] tracking-widest mt-1 opacity-80">
+              Solving your "Right Now" reality
+            </p>
           </div>
-        )}
+          {renderCollectionCards(COLLECTIONS_DATA.lifestyle)}
+        </section>
+
+        {/* 2. The Global Gallery */}
+        <section className="mb-8">
+          <div className="px-4 mb-3">
+            <h2 className="text-xl font-black text-white tracking-tight">The Global Gallery</h2>
+            <p className="text-[10px] font-bold uppercase text-[#636b2f] tracking-widest mt-1 opacity-80">
+              Enjoy a taste around the world
+            </p>
+          </div>
+          {renderCollectionCards(COLLECTIONS_DATA.global)}
+        </section>
+
+        {/* 3. The Seasonal Suite */}
+        <section className="mb-8">
+          <div className="px-4 mb-3">
+            <h2 className="text-xl font-black text-white tracking-tight">The Seasonal Suite</h2>
+            <p className="text-[10px] font-bold uppercase text-[#636b2f] tracking-widest mt-1 opacity-80">
+              A recipe perfect for anytime of the year
+            </p>
+          </div>
+          {renderCollectionCards(COLLECTIONS_DATA.seasonal)}
+        </section>
 
       </main>
     </div>
