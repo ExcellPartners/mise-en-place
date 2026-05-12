@@ -72,7 +72,7 @@ const App: React.FC = () => {
   // Refs for scroll persistence
   const mainRef = useRef<HTMLElement>(null);
   const recipesScrollRef = useRef(0);
-  const recipePageRef = useRef(1); // persists which page user was on
+  const recipePageRef = useRef(1);
 
   const [recipesList, setRecipesList] = useState<Recipe[]>([]);
   const [masterIngredients, setMasterIngredients] = useState<MasterIngredient[]>([]);
@@ -101,17 +101,37 @@ const App: React.FC = () => {
   const [isAutoSyncing, setIsAutoMapping] = useState(false);
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [scannedRecipeData, setScannedRecipeData] = useState<Recipe | undefined>(undefined);
-  // Planner now starts empty as requested
-  const [mealPlans, setMealPlans] = useState<MealPlan[]>([]);
-  
-  // Cooked History for Recap
-  const [cookedHistory, setCookedHistory] = useState<{date: string; recipeId: string}[]>(() => {
-    const saved = localStorage.getItem('mise_cooked_history');
-    return saved ? JSON.parse(saved) : [];
+
+  const [mealPlans, setMealPlans] = useState<MealPlan[]>(() => {
+    try { const s = localStorage.getItem('mise_meal_plans'); return s ? JSON.parse(s) : []; } catch { return []; }
   });
-  
-  const [pinnedRecipeIds, setPinnedRecipeIds] = useState<string[]>([]);
-  const [likedRecipeIds, setLikedRecipeIds] = useState<string[]>([]);
+  const setMealPlansAndSync = (updater: MealPlan[] | ((p: MealPlan[]) => MealPlan[])) => {
+    setMealPlans(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      localStorage.setItem('mise_meal_plans', JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const [cookedHistory, setCookedHistory] = useState<{date: string; recipeId: string; recipeName?: string}[]>(() => {
+    try { const s = localStorage.getItem('mise_cooked_history'); return s ? JSON.parse(s) : []; } catch { return []; }
+  });
+
+  const [pinnedRecipeIds, setPinnedRecipeIds] = useState<string[]>(() => {
+    try { const s = localStorage.getItem('mise_pinned'); return s ? JSON.parse(s) : []; } catch { return []; }
+  });
+  const setPinnedAndSync = (ids: string[]) => {
+    setPinnedRecipeIds(ids);
+    localStorage.setItem('mise_pinned', JSON.stringify(ids));
+  };
+
+  const [likedRecipeIds, setLikedRecipeIds] = useState<string[]>(() => {
+    try { const s = localStorage.getItem('mise_liked'); return s ? JSON.parse(s) : []; } catch { return []; }
+  });
+  const setLikedAndSync = (ids: string[]) => {
+    setLikedRecipeIds(ids);
+    localStorage.setItem('mise_liked', JSON.stringify(ids));
+  };
 
   const [isAddOverlayOpen, setIsAddOverlayOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -212,28 +232,25 @@ const App: React.FC = () => {
   const handleTogglePin = (id: string) => {
     setPinnedRecipeIds(prev => {
       const exists = prev.includes(id);
-      if (exists) {
-        showToast('Removed from Planner');
-        return prev.filter(x => x !== id);
-      }
-      showToast('Pinned to Meal Planner');
-      return [...prev, id];
+      const next = exists ? prev.filter(x => x !== id) : [...prev, id];
+      localStorage.setItem('mise_pinned', JSON.stringify(next));
+      showToast(exists ? 'Removed from Planner' : 'Pinned to Meal Planner');
+      return next;
     });
   };
 
   const handleToggleLike = async (id: string) => {
-    // 1. Optimistic UI Update
     const recipe = recipesList.find(r => r.id === id);
     const newStatus = !recipe?.isFavorite;
-    
     setRecipesList(prev => prev.map(r => r.id === id ? { ...r, isFavorite: newStatus } : r));
-    setLikedRecipeIds(prev => newStatus ? [...prev, id] : prev.filter(x => x !== id));
-    
-    // Update selected recipe if it's open
+    setLikedRecipeIds(prev => {
+      const next = newStatus ? [...prev, id] : prev.filter(x => x !== id);
+      localStorage.setItem('mise_liked', JSON.stringify(next));
+      return next;
+    });
     if (selectedRecipe && selectedRecipe.id === id) {
-        setSelectedRecipe(prev => prev ? { ...prev, isFavorite: newStatus } : null);
+      setSelectedRecipe(prev => prev ? { ...prev, isFavorite: newStatus } : null);
     }
-
     showToast(newStatus ? 'Added to Favorites' : 'Removed from Favorites');
 
     // 2. Background Sync
@@ -249,7 +266,7 @@ const App: React.FC = () => {
   };
 
   const handleRemoveMealPlan = (date: string, mealType: string) => {
-    setMealPlans(prev => prev.filter(p => !(p.date === date && p.mealType === mealType)));
+    setMealPlansAndSync(prev => prev.filter(p => !(p.date === date && p.mealType === mealType)));
   };
 
   const handleAddToShopping = (ing: MasterIngredient | MyItem | string | RecipeIngredient, source: 'recipe' | 'manual' | 'myItem', amountOverride?: number) => {
@@ -433,7 +450,7 @@ const App: React.FC = () => {
     if (currentView === 'planner') return <Planner 
       mealPlans={mealPlans} recipes={recipesList} pantry={pantry} pinnedIds={pinnedRecipeIds} 
       shoppingList={rawShoppingEntries}
-      onScheduleMeal={(d, t, id) => setMealPlans(prev => [...prev, {date:d, mealType:t, recipeId:id, servings:4}])} 
+      onScheduleMeal={(d, t, id) => setMealPlansAndSync(prev => [...prev, {date:d, mealType:t, recipeId:id, servings:4}])} 
       onGenerateShopping={() => resetToView('shopping')} onBack={handleBack} 
       onStartCooking={(r) => { setSelectedRecipe(r); navigateTo('cookingMode'); }} 
       onAddToShopping={(ings) => ings.forEach(ing => handleAddToShopping(ing, 'recipe'))} 
@@ -449,7 +466,7 @@ const App: React.FC = () => {
           setCookedHistory(updatedHistory);
           localStorage.setItem('mise_cooked_history', JSON.stringify(updatedHistory));
 
-          setMealPlans([]);
+          setMealPlansAndSync([]);
           handleClearShoppingList();
           alert('Menu Archived & Ingredients Deducted from Pantry.');
           triggerSync();
@@ -574,14 +591,12 @@ const App: React.FC = () => {
       <main ref={mainRef} className="flex-1 overflow-y-auto no-scrollbar pb-24">{renderView()}</main>
 
       {isAuthenticated && isProfileComplete && !['login', 'onboarding', 'cookingMode', 'scanRecipe', 'addRecipeManual'].includes(viewStack[viewStack.length - 1]) && (
-        <nav className="fixed bottom-0 left-0 right-0 bg-[#0a0c0a]/95 backdrop-blur-xl border-t border-gray-800 z-[100] nav-safe-pb">
-          <div className="flex justify-around items-end px-4 pt-3 w-full">
-            <button onClick={() => resetToView('recipes')} className={`flex flex-col items-center gap-1 transition-colors ${viewStack[viewStack.length-1] === 'recipes' ? 'text-primary' : 'text-gray-500'}`}><span className="material-symbols-outlined">home</span><span className="text-[10px] font-bold uppercase">Home</span></button>
-            <button onClick={() => resetToView('planner')} className={`flex flex-col items-center gap-1 transition-colors ${viewStack[viewStack.length-1] === 'planner' ? 'text-primary' : 'text-gray-500'}`}><span className="material-symbols-outlined">calendar_today</span><span className="text-[10px] font-medium uppercase">Planner</span></button>
-            <div className="relative -top-4"><button onClick={() => setIsAddOverlayOpen(true)} className="w-14 h-14 bg-primary rounded-full shadow-2xl flex items-center justify-center text-white ring-4 ring-[#0a0c0a]"><span className="material-symbols-outlined text-3xl font-bold">add</span></button></div>
-            <button onClick={() => resetToView('shopping')} className={`flex flex-col items-center gap-1 transition-colors ${viewStack[viewStack.length-1] === 'shopping' ? 'text-primary' : 'text-gray-500'}`}><span className="material-symbols-outlined">shopping_basket</span><span className="text-[10px] font-medium uppercase">Shopping</span></button>
-            <button onClick={() => resetToView('pantry')} className={`flex flex-col items-center gap-1 transition-colors ${viewStack[viewStack.length-1] === 'pantry' ? 'text-primary' : 'text-gray-500'}`}><span className="material-symbols-outlined">inventory_2</span><span className="text-[10px] font-medium uppercase">Pantry</span></button>
-          </div>
+        <nav className="fixed bottom-0 left-0 right-0 bg-[#0a0c0a]/95 backdrop-blur-xl border-t border-gray-800 px-4 py-3 pb-8 flex justify-around items-end z-[100] max-w-[480px] mx-auto">
+          <button onClick={() => resetToView('recipes')} className="flex flex-col items-center gap-1 text-gray-400"><span className="material-symbols-outlined">home</span><span className="text-[10px] font-bold uppercase">Home</span></button>
+          <button onClick={() => resetToView('planner')} className="flex flex-col items-center gap-1 text-gray-400"><span className="material-symbols-outlined">calendar_today</span><span className="text-[10px] font-medium uppercase">Planner</span></button>
+          <div className="relative -top-4"><button onClick={() => setIsAddOverlayOpen(true)} className="w-14 h-14 bg-primary rounded-full shadow-2xl flex items-center justify-center text-white ring-4 ring-background-dark"><span className="material-symbols-outlined text-3xl font-bold">add</span></button></div>
+          <button onClick={() => resetToView('shopping')} className="flex flex-col items-center gap-1 text-gray-400"><span className="material-symbols-outlined">shopping_basket</span><span className="text-[10px] font-medium uppercase">Shopping</span></button>
+          <button onClick={() => resetToView('pantry')} className="flex flex-col items-center gap-1 text-gray-400"><span className="material-symbols-outlined">inventory_2</span><span className="text-[10px] font-medium uppercase">Pantry</span></button>
         </nav>
       )}
 

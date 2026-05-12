@@ -28,28 +28,32 @@ const Home: React.FC<HomeProps> = ({
   const [activeCategory, setActiveCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(initialPage);
-  const categories = ['All', 'Favorites', 'Whole Meal', 'Main', 'Side', 'Appetizer', 'Cocktail', 'Breakfast', 'Dessert'];
+  const categories = ['All', 'Favorites', 'Main', 'Side', 'Appetizer', 'Beverages', 'Breakfast', 'Dessert'];
 
   const displayRecipes = useMemo(() => {
-    return [...recipes].filter(recipe => {
-      let matchesCategory = true;
-      if (activeCategory === 'Favorites') matchesCategory = likedIds.includes(recipe.id);
-      else if (activeCategory !== 'All') matchesCategory = recipe.category === activeCategory;
-      const title = (recipe.title || '').toLowerCase();
-      const desc = (recipe.description || '').toLowerCase();
-      const query = searchQuery.toLowerCase();
-      return matchesCategory && (title.includes(query) || desc.includes(query));
-    }).sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+    return [...recipes]
+      .filter(recipe => {
+        let matchesCategory = true;
+        if (activeCategory === 'Favorites') {
+          matchesCategory = likedIds.includes(recipe.id);
+        } else if (activeCategory === 'Beverages') {
+          matchesCategory = recipe.category === 'Beverages' || recipe.category === 'Cocktail';
+        } else if (activeCategory !== 'All') {
+          matchesCategory = recipe.category === activeCategory;
+        }
+        const title = (recipe.title || '').toLowerCase();
+        const desc = (recipe.description || '').toLowerCase();
+        const query = searchQuery.toLowerCase();
+        return matchesCategory && (title.includes(query) || desc.includes(query));
+      })
+      .sort((a, b) => (a.title || '').localeCompare(b.title || ''));
   }, [recipes, activeCategory, searchQuery, likedIds]);
 
   const totalPages = Math.max(1, Math.ceil(displayRecipes.length / RECIPES_PER_PAGE));
   const safePage = Math.min(currentPage, totalPages);
   const pagedRecipes = displayRecipes.slice((safePage - 1) * RECIPES_PER_PAGE, safePage * RECIPES_PER_PAGE);
 
-  const goToPage = (p: number) => {
-    setCurrentPage(p);
-    onPageChange?.(p);
-  };
+  const goToPage = (p: number) => { setCurrentPage(p); onPageChange?.(p); };
   const handleCategoryChange = (cat: string) => { setActiveCategory(cat); goToPage(1); };
   const handleSearchChange = (q: string) => { setSearchQuery(q); goToPage(1); };
 
@@ -227,7 +231,69 @@ const Home: React.FC<HomeProps> = ({
           </button>
         </div>
       )}
+    </div>
+  );
+};
 
+export default Home;              key={recipe.id} 
+              className="flex flex-col gap-3 group cursor-pointer"
+              onClick={() => onRecipeSelect(recipe)}
+            >
+              <div className="relative w-full aspect-square rounded-3xl shadow-2xl overflow-hidden border border-white/5 bg-[#1a1d14]">
+                {finalImageUrl ? (
+                  <img 
+                    src={finalImageUrl} 
+                    alt={recipe.title}
+                    referrerPolicy="no-referrer"
+                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                    onError={(e) => {
+                      const img = e.target as HTMLImageElement;
+                      if (img.src.includes('uc?export=view')) {
+                         const idMatch = img.src.match(/id=([a-zA-Z0-9_-]+)/);
+                         if (idMatch) {
+                           img.src = `https://drive.google.com/thumbnail?id=${idMatch[1]}&sz=w1000`;
+                           return;
+                         }
+                      }
+                      img.style.display = 'none';
+                    }}
+                  />
+                ) : null}
+                
+                {!finalImageUrl && (
+                  <div className="w-full h-full flex flex-col items-center justify-center bg-white/5 text-white/20">
+                    <span className="material-symbols-outlined text-4xl mb-2">image_not_supported</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest">No Media</span>
+                  </div>
+                )}
+                
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60"></div>
+                
+                {/* Pin Action Button */}
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onTogglePin(recipe.id);
+                  }}
+                  className={`absolute top-3 right-3 p-2 rounded-full backdrop-blur-xl border active:scale-90 transition-all flex items-center justify-center shadow-lg ${
+                    isPinned 
+                      ? 'bg-[#636b2f] border-[#636b2f] text-white' 
+                      : 'bg-black/40 border-white/10 text-white'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-base">push_pin</span>
+                </button>
+              </div>
+              <div className="px-1">
+                <p className="text-white text-base font-black leading-tight group-hover:text-[#636b2f] transition-colors line-clamp-1">{recipe.title}</p>
+                <p className="text-[#b6baa1] text-[10px] font-black uppercase tracking-widest mt-1">
+                  {(recipe.prepTime || 0) + (recipe.cookTime || 0)} MIN • {recipe.difficulty || 'Easy'}
+                </p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 };
