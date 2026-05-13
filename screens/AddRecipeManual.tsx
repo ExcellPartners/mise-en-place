@@ -28,6 +28,9 @@ const AddRecipeManual: React.FC<AddRecipeManualProps> = ({ onBack, onSave, initi
   const [category, setCategory] = useState('Whole Meal');
   const [difficulty, setDifficulty] = useState('Medium');
   const [chefTip, setChefTip] = useState('');
+  const [sourceName, setSourceName] = useState('');
+  const [sourceAuthor, setSourceAuthor] = useState('');
+  const [sourceUrl, setSourceUrl] = useState('');
   const [ingredients, setIngredients] = useState<RecipeIngredient[]>([{ name: '', amount: 0, unit: '' }]);
   const [instructions, setInstructions] = useState<string[]>(['']);
   const [coverPhoto, setCoverPhoto] = useState<string | null>(null);
@@ -44,6 +47,9 @@ const AddRecipeManual: React.FC<AddRecipeManualProps> = ({ onBack, onSave, initi
       setCategory(initialData.category || 'Whole Meal');
       setDifficulty(initialData.difficulty || 'Medium');
       setChefTip(initialData.chefTip || '');
+      setSourceName(initialData.sourceName || '');
+      setSourceAuthor(initialData.sourceAuthor || '');
+      setSourceUrl(initialData.sourceUrl || '');
       setIngredients(initialData.ingredients?.length ? initialData.ingredients : [{ name: '', amount: 0, unit: '' }]);
       setInstructions(initialData.instructions?.length ? initialData.instructions : ['']);
       setCoverPhoto(initialData.imageUrl || null);
@@ -90,6 +96,9 @@ const AddRecipeManual: React.FC<AddRecipeManualProps> = ({ onBack, onSave, initi
       setCategory('Whole Meal');
       setDifficulty('Medium');
       setChefTip('');
+      setSourceName('');
+      setSourceAuthor('');
+      setSourceUrl('');
       
       setIngredients(parsedIngredients.length ? parsedIngredients : [{ name: '', amount: 0, unit: '' }]);
       setInstructions(data.instructions?.length ? data.instructions : ['']);
@@ -159,6 +168,9 @@ const AddRecipeManual: React.FC<AddRecipeManualProps> = ({ onBack, onSave, initi
       category,
       difficulty,
       chefTip: chefTip || 'Enjoy your meal!',
+      sourceName: sourceName || undefined,
+      sourceAuthor: sourceAuthor || undefined,
+      sourceUrl: sourceUrl || undefined,
       ingredients: cleanedIngredients,
       instructions: instructions.filter(s => s.trim() !== ''),
       imageUrl: coverPhoto || 'https://images.unsplash.com/photo-1495521821757-a1efb6729352?auto=format&fit=crop&w=600&h=800', 
@@ -260,6 +272,17 @@ const AddRecipeManual: React.FC<AddRecipeManualProps> = ({ onBack, onSave, initi
                 <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest mb-2 ml-1">Chef's Tip</p>
                 <textarea className="bg-[#1a1f1a] border-[#2c332c] focus:border-[#636b2f] text-white w-full rounded-xl h-16 px-4 py-3 font-medium text-sm resize-none" placeholder="Secret technique..." value={chefTip} onChange={(e) => setChefTip(e.target.value)} />
               </label>
+
+              {/* Source */}
+              <label className="flex flex-col gap-2">
+                <div className="flex items-center gap-2 ml-1">
+                  <span className="material-symbols-outlined text-sm text-white/40">menu_book</span>
+                  <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest">Source <span className="text-white/20 normal-case font-medium tracking-normal">(optional)</span></p>
+                </div>
+                <input className="bg-[#1a1f1a] border border-[#2c332c] focus:border-[#636b2f] text-white w-full rounded-xl h-12 px-4 font-medium text-sm outline-none" placeholder="Cookbook title or website name" value={sourceName} onChange={(e) => setSourceName(e.target.value)} />
+                <input className="bg-[#1a1f1a] border border-[#2c332c] focus:border-[#636b2f] text-white w-full rounded-xl h-12 px-4 font-medium text-sm outline-none" placeholder="Author (for books)" value={sourceAuthor} onChange={(e) => setSourceAuthor(e.target.value)} />
+                <input type="url" className="bg-[#1a1f1a] border border-[#2c332c] focus:border-[#636b2f] text-white w-full rounded-xl h-12 px-4 font-medium text-sm outline-none" placeholder="https://... (optional link)" value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} />
+              </label>
             </div>
 
             <div className="px-4">
@@ -323,7 +346,7 @@ const AddRecipeManual: React.FC<AddRecipeManualProps> = ({ onBack, onSave, initi
         )}
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-[#1c1d15]/90 backdrop-blur-xl border-t border-[#2c332c] w-full z-40">
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-[#1c1d15]/90 backdrop-blur-xl border-t border-[#2c332c] z-40">
         <button 
           onClick={handleSave} 
           disabled={!allUnitsValid}

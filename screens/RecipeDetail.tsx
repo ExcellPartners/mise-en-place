@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import { Recipe, PantryItem } from '../types';
 import { scaleIngredients, formatImageUrl } from '../utils/logic';
 import PrintPreview from './PrintPreview';
@@ -63,15 +63,10 @@ const RecipeDetail: React.FC<RecipeDetailProps> = ({
     setIsDeleteModalOpen(false);
   };
 
-  const scrollRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = 0;
-  }, [recipe.id]);
-
   const finalHeroUrl = formatImageUrl(recipe.imageUrl);
 
   return (
-    <div ref={scrollRef} className="min-h-screen flex flex-col bg-background-dark overflow-x-hidden pb-32 relative">
+    <div className="min-h-screen flex flex-col bg-background-dark overflow-x-hidden pb-32 relative">
       <div 
         className="fixed left-0 right-0 z-50 flex items-center justify-between p-4 bg-transparent no-print header-safe-pt"
       >

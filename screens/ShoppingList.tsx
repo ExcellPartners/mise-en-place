@@ -51,27 +51,34 @@ const ShoppingList: React.FC<ShoppingListProps> = ({
   const neededItems = useMemo(() => itemsFromState.filter(item => !item.inPantry), [itemsFromState]);
   
   const groupedItems = useMemo<Record<string, ShoppingListItem[]>>(() => {
+    const DEPT_ORDER = [
+      'Produce', 'Meat', 'Seafood', 'Deli', 'Cheese', 'Dairy', 'Bakery',
+      'Frozen', 'Beverages', 'Pantry', 'Canned', 'Dry Goods', 'Snacks',
+      'Condiments', 'Baking', 'International', 'Health', 'Household', 'Misc', 'UNMAPPED'
+    ];
+
     const groups: Record<string, ShoppingListItem[]> = {};
     neededItems.forEach(item => {
-      // If aisle is missing or generic "Shelf", default to Misc, unless it has a specific department
-      let header = item.aisle;
-      
-      // Clean up headers
-      if (!header || header.toLowerCase() === 'shelf') header = 'Misc'; 
+      // Use department as primary grouping key, fall back to aisle
+      let header = item.department && item.department !== 'UNMAPPED' && item.department.toLowerCase() !== 'shelf'
+        ? item.department
+        : item.aisle && item.aisle.toLowerCase() !== 'shelf'
+          ? item.aisle
+          : 'Misc';
       if (item.department === 'UNMAPPED') header = 'UNMAPPED';
-      
       if (!groups[header]) groups[header] = [];
       groups[header].push(item);
     });
 
+    // Sort groups by DEPT_ORDER, then alphabetically for anything not in list
     const sortedGroups: Record<string, ShoppingListItem[]> = {};
-    if (groups['UNMAPPED']) sortedGroups['UNMAPPED'] = groups['UNMAPPED'];
-    
-    // Sort logic: Numeric aisles first, then alpha
-    Object.keys(groups).sort((a,b) => a.localeCompare(b, undefined, {numeric: true})).forEach(key => {
-      if (key !== 'UNMAPPED') sortedGroups[key] = groups[key];
-    });
-
+    const knownKeys = Object.keys(groups).filter(k => DEPT_ORDER.includes(k));
+    const unknownKeys = Object.keys(groups).filter(k => !DEPT_ORDER.includes(k)).sort();
+    const allKeys = [
+      ...DEPT_ORDER.filter(d => groups[d]),
+      ...unknownKeys,
+    ];
+    allKeys.forEach(key => { if (groups[key]) sortedGroups[key] = groups[key]; });
     return sortedGroups;
   }, [neededItems]);
 
