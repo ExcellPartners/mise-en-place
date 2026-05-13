@@ -166,19 +166,15 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const activeView = viewStack[viewStack.length - 1];
-    const prevView = prevViewRef.current;
     prevViewRef.current = activeView;
-
     if (!mainRef.current) return;
 
     if (activeView === 'recipes') {
-      // Returning to recipe list — restore exact scroll position
       const savedPos = recipesScrollRef.current;
       requestAnimationFrame(() => {
         if (mainRef.current) mainRef.current.scrollTop = savedPos;
       });
     } else {
-      // Going to any other view — force scroll to top aggressively
       mainRef.current.scrollTop = 0;
       requestAnimationFrame(() => {
         if (mainRef.current) mainRef.current.scrollTop = 0;
@@ -626,7 +622,10 @@ const App: React.FC = () => {
     >
       <Toast message={toastState.message} isVisible={toastState.visible} />
       {isLoading && <SplashScreen progress={loadingProgress} />}
-      <main ref={mainRef} className="flex-1 overflow-y-auto no-scrollbar pb-24">{renderView()}</main>
+      {viewStack[viewStack.length - 1] === 'recipes'
+        ? <main ref={mainRef} className="flex-1 overflow-y-auto no-scrollbar pb-24">{renderView()}</main>
+        : <main key={viewStack[viewStack.length - 1] + (selectedRecipe?.id ?? '')} ref={mainRef} className="flex-1 overflow-y-auto no-scrollbar pb-24">{renderView()}</main>
+      }
 
       {isAuthenticated && isProfileComplete && !['login', 'onboarding', 'cookingMode', 'scanRecipe', 'addRecipeManual'].includes(viewStack[viewStack.length - 1]) && (
         <nav className="fixed bottom-0 left-0 right-0 bg-[#0a0c0a]/95 backdrop-blur-xl border-t border-gray-800 z-[100] nav-safe-pb">
