@@ -512,7 +512,8 @@ const Planner: React.FC<PlannerProps> = ({
           servings={selectorData.servings} 
           pantry={pantry} 
           shoppingList={shoppingList}
-          onClose={() => setSelectorData(null)} 
+          onClose={() => setSelectorData(null)}
+          onServingsChange={(s) => setSelectorData(prev => prev ? { ...prev, servings: s } : null)}
           onConfirm={(ingredients) => { onAddToShopping?.(ingredients); setSelectorData(null); showThemedToast(`${ingredients.length} items added to trip`); }} 
         />
       )}

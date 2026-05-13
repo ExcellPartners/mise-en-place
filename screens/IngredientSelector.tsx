@@ -102,7 +102,7 @@ const IngredientSelector: React.FC<IngredientSelectorProps> = ({
         onClick={onClose}
       ></div>
 
-      <div className="relative w-full max-w-[480px] bg-[#1c1d15] rounded-t-[2.5rem] shadow-2xl border-t border-white/5 flex flex-col max-h-[90vh] animate-in slide-in-from-bottom duration-300 overflow-hidden pb-8">
+      <div className="relative w-full bg-[#1c1d15] rounded-t-[2.5rem] shadow-2xl border-t border-white/5 flex flex-col max-h-[90vh] animate-in slide-in-from-bottom duration-300 overflow-hidden pb-8">
         <div className="flex flex-col items-center pt-3 pb-2 cursor-pointer" onClick={onClose}>
           <div className="h-1.5 w-12 rounded-full bg-[#3b3e2e]"></div>
         </div>
