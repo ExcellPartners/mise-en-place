@@ -11,7 +11,7 @@ interface RecipeSavedProps {
 
 const RecipeSaved: React.FC<RecipeSavedProps> = ({ recipe, onGoHome, onViewRecipe, onClose }) => {
   return (
-    <div className="relative flex min-h-screen w-full flex-col overflow-x-hidden bg-[#0f110c] text-white font-display max-w-[480px] mx-auto border-x border-white/5">
+    <div className="relative flex min-h-screen w-full flex-col overflow-x-hidden bg-[#0f110c] text-white font-display w-full">
       {/* Top Navigation Area */}
       <div className="flex items-center justify-between px-6 pt-6 pb-2 header-safe-pt">
         <button 

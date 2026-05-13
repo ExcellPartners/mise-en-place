@@ -29,7 +29,7 @@ const Profile: React.FC<ProfileProps> = ({
   const { spreadsheetId } = useAuth();
 
   return (
-    <div className="flex flex-col min-h-screen bg-[#1c1d15] text-white font-display w-full">
+    <div className="flex flex-col min-h-screen bg-[#1c1d15] text-white font-display w-full w-full">
       {/* Role Reversal Header */}
       <header className="sticky top-0 z-10 bg-[#1c1d15]/90 backdrop-blur-xl px-4 py-3 flex items-center justify-between header-safe-pt border-b border-white/5">
         <button onClick={onBack} className="flex items-center justify-center size-10 active:scale-90 transition-transform">

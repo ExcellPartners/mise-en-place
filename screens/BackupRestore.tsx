@@ -17,7 +17,7 @@ const BackupRestore: React.FC<BackupRestoreProps> = ({ onBack }) => {
   };
 
   return (
-    <div className="bg-[#0f110c] text-[#f5f5f5] min-h-screen flex flex-col font-sans max-w-[480px] mx-auto border-x border-white/5 shadow-2xl">
+    <div className="bg-[#0f110c] text-[#f5f5f5] min-h-screen flex flex-col font-sans w-full shadow-2xl">
       {/* Header */}
       <header className="flex items-center p-6 pb-4 justify-between sticky top-0 z-10 backdrop-blur-xl bg-[#0f110c]/80 border-b border-white/5">
         <button 

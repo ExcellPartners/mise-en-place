@@ -124,7 +124,7 @@ const PrecisionConfig: React.FC<PrecisionConfigProps> = ({
   };
 
   return (
-    <div className="w-full min-h-screen bg-[#1c1d15] text-white flex flex-col">
+    <div className="w-full min-h-screen bg-[#1c1d15] text-white flex flex-col border-x border-slate-800">
       <div className="sticky top-0 z-20 bg-[#1c1d15]/95 backdrop-blur-md pb-2 header-safe-pt">
         <div className="flex items-center p-4 pb-2 justify-between">
           <button onClick={onBack} className="text-white flex size-12 shrink-0 items-center cursor-pointer active:scale-90">

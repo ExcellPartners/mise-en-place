@@ -57,7 +57,7 @@ const AddEssential: React.FC<AddEssentialProps> = ({ onCancel, onSave }) => {
   };
 
   return (
-    <div className="bg-[#1c1d15] text-white min-h-screen pb-32 max-w-[480px] mx-auto overflow-x-hidden relative">
+    <div className="bg-[#1c1d15] text-white min-h-screen pb-32 w-full overflow-x-hidden relative">
       <header className="sticky top-0 z-50 bg-[#1c1d15]/80 backdrop-blur-md border-b border-white/5">
         <div className="flex items-center p-4 justify-between">
           <button onClick={onCancel} className="flex items-center text-[#636b2f] active:scale-95 transition-transform">
@@ -171,7 +171,7 @@ const AddEssential: React.FC<AddEssentialProps> = ({ onCancel, onSave }) => {
       </main>
 
       {/* Floating Save Button */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 pb-10 bg-[#1c1d15]/95 backdrop-blur-lg border-t border-white/5 max-w-[480px] mx-auto z-40">
+      <div className="fixed bottom-0 left-0 right-0 p-4 pb-10 bg-[#1c1d15]/95 backdrop-blur-lg border-t border-white/5 w-full z-40">
         <button 
           onClick={handleSave}
           className="w-full bg-[#636b2f] text-white font-bold py-4 rounded-xl shadow-lg active:scale-[0.98] transition-all"

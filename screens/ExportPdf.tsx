@@ -28,7 +28,7 @@ const ExportPdf: React.FC<ExportPdfProps> = ({ recipe, onBack, servings = 4, onG
   };
 
   return (
-    <div className="max-w-[480px] mx-auto min-h-screen bg-[#1d1d15] text-white flex flex-col font-display overflow-hidden no-print">
+    <div className="w-full min-h-screen bg-[#1d1d15] text-white flex flex-col font-display overflow-hidden no-print">
       {/* Header */}
       <header className="sticky top-0 z-20 flex items-center bg-[#1d1d15] p-4 pb-2 justify-between border-b border-white/5">
         <button 
@@ -159,7 +159,7 @@ const ExportPdf: React.FC<ExportPdfProps> = ({ recipe, onBack, servings = 4, onG
       </main>
 
       {/* Footer Area */}
-      <footer className="fixed bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-[#1d1d15] via-[#1d1d15]/95 to-transparent pt-12 z-30 max-w-[480px] mx-auto">
+      <footer className="fixed bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-[#1d1d15] via-[#1d1d15]/95 to-transparent pt-12 z-30 w-full">
         <button 
           onClick={handleGenerate}
           className="w-full bg-[#636b2f] hover:brightness-110 text-white font-black py-4 rounded-2xl shadow-[0_8px_30px_rgba(99,107,47,0.3)] transition-all active:scale-[0.98] flex items-center justify-center gap-3 text-lg"

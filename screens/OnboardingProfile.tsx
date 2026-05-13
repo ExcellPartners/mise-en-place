@@ -43,7 +43,7 @@ const OnboardingProfile: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-[1100] bg-[#0f110c] flex flex-col font-sans max-w-[480px] mx-auto overflow-hidden">
+    <div className="fixed inset-0 z-[1100] bg-[#0f110c] flex flex-col font-sans w-full overflow-hidden">
       {/* Decorative Cloud Graphic */}
       <div className="absolute top-[-10%] left-[-20%] w-[100%] aspect-square bg-primary/10 rounded-full blur-[120px] opacity-60"></div>
       

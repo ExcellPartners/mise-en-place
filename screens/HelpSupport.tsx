@@ -27,7 +27,7 @@ const HelpSupport: React.FC<HelpSupportProps> = ({ onBack }) => {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
 
   return (
-    <div className="flex flex-col min-h-screen bg-[#1c1d15] text-white font-display w-full overflow-hidden">
+    <div className="flex flex-col min-h-screen bg-[#1c1d15] text-white font-display w-full w-full overflow-hidden">
       <header className="sticky top-0 z-20 bg-[#1c1d15]/80 backdrop-blur-xl px-4 py-3 flex items-center justify-between border-b border-white/5 no-print header-safe-pt">
         <button 
           onClick={onBack}

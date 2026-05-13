@@ -168,7 +168,7 @@ const AddRecipeManual: React.FC<AddRecipeManualProps> = ({ onBack, onSave, initi
   const allUnitsValid = ingredients.every(ing => !ing.name || isUnitValid(ing.unit));
 
   return (
-    <div className="relative flex h-auto min-h-screen w-full flex-col overflow-x-hidden bg-[#1c1d15] text-white">
+    <div className="relative flex h-auto min-h-screen w-full flex-col overflow-x-hidden w-full bg-[#1c1d15] text-white">
       <input type="file" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
 
       <div className="flex items-center bg-[#1c1d15]/95 backdrop-blur-md p-4 pb-2 justify-between sticky top-0 z-30 border-b border-[#2c332c] header-safe-pt">
@@ -323,7 +323,7 @@ const AddRecipeManual: React.FC<AddRecipeManualProps> = ({ onBack, onSave, initi
         )}
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-[#1c1d15]/90 backdrop-blur-xl border-t border-[#2c332c] z-40">
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-[#1c1d15]/90 backdrop-blur-xl border-t border-[#2c332c] w-full z-40">
         <button 
           onClick={handleSave} 
           disabled={!allUnitsValid}

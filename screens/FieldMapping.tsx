@@ -170,7 +170,7 @@ const FieldMapping: React.FC<FieldMappingProps> = ({ onBack, onConfirm }) => {
 
   if (isCommitting || commitError) {
     return (
-      <div className="fixed inset-0 z-[200] bg-[#0f110c] flex flex-col items-center justify-center p-10 text-center animate-in fade-in duration-500 max-w-[480px] mx-auto border-x border-white/5 shadow-2xl">
+      <div className="fixed inset-0 z-[200] bg-[#0f110c] flex flex-col items-center justify-center p-10 text-center animate-in fade-in duration-500 w-full shadow-2xl">
         <div className="relative mb-12">
           {!commitError ? (
             <div className="size-32 rounded-full border-4 border-primary/10 border-t-primary animate-spin"></div>
@@ -193,7 +193,7 @@ const FieldMapping: React.FC<FieldMappingProps> = ({ onBack, onConfirm }) => {
   }
 
   return (
-    <div className="bg-[#0f110c] text-white font-sans h-screen flex flex-col max-w-[480px] mx-auto overflow-hidden border-x border-white/5 shadow-2xl">
+    <div className="bg-[#0f110c] text-white font-sans h-screen flex flex-col w-full overflow-hidden border-x border-white/5 shadow-2xl">
       <header className="bg-[#0f110c]/95 backdrop-blur-md sticky top-0 z-30 border-b border-white/5 header-safe-pt">
         <div className="flex items-center justify-between px-4 pb-4">
           <button onClick={onBack} className="size-10 flex items-center justify-center rounded-full bg-white/5 active:scale-90 transition-transform"><span className="material-symbols-outlined text-primary font-bold">arrow_back_ios_new</span></button>
@@ -227,7 +227,7 @@ const FieldMapping: React.FC<FieldMappingProps> = ({ onBack, onConfirm }) => {
           })}
         </div>
       </main>
-      <div className="fixed bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-[#0f110c] via-[#0f110c]/90 to-transparent z-50 max-w-[480px] mx-auto">
+      <div className="fixed bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-[#0f110c] via-[#0f110c]/90 to-transparent z-50 w-full">
         <button onClick={handleConfirm} className="w-full h-18 rounded-[2rem] bg-primary text-white font-black text-lg shadow-2xl flex items-center justify-center gap-3 active:scale-[0.98] uppercase tracking-widest"><span className="material-symbols-outlined font-black text-2xl">verified</span>Confirm & Save Ledger</button>
       </div>
     </div>

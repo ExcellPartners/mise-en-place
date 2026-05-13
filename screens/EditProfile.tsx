@@ -22,13 +22,17 @@ const ROLES = [
 const EditProfile: React.FC<EditProfileProps> = ({ onBack, onSave, initialName, initialBio, initialAvatar }) => {
   // Parse initial name to separate Role from Name
   const parseName = (fullName: string) => {
+    // Check for standard roles first
     for (const r of ROLES.filter(r => r !== 'Custom')) {
       if (fullName.startsWith(r + ' ')) {
         return { role: r, realName: fullName.substring(r.length + 1) };
       }
     }
-    // No matching role prefix — treat the whole thing as the name, no role
-    return { role: 'Home Cook', realName: fullName };
+    // Fallback: If no known role, assume "Chef" if it starts with it, otherwise Custom or Home Cook
+    if (fullName.startsWith("Chef ")) {
+      return { role: "Chef", realName: fullName.substring(5) };
+    }
+    return { role: "Home Cook", realName: fullName };
   };
 
   const initialParsed = parseName(initialName);
@@ -62,7 +66,7 @@ const EditProfile: React.FC<EditProfileProps> = ({ onBack, onSave, initialName, 
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-[#1c1d15] text-white font-display max-w-[480px] mx-auto border-x border-white/5 overflow-hidden">
+    <div className="flex flex-col min-h-screen bg-[#1c1d15] text-white font-display w-full overflow-hidden">
       {/* Hidden File Input */}
       <input 
         type="file" 

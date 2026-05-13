@@ -33,7 +33,7 @@ const ReviewScan: React.FC<ReviewScanProps> = ({ scannedRecipe, onSave, onRescan
   };
 
   return (
-    <div className="relative flex h-full min-h-screen w-full flex-col max-w-[480px] mx-auto overflow-x-hidden pb-24 bg-[#1c1d15] text-white">
+    <div className="relative flex h-full min-h-screen w-full flex-col w-full overflow-x-hidden pb-24 bg-[#1c1d15] text-white">
       {/* Top Bar */}
       <div className="sticky top-0 z-20 flex items-center bg-[#1c1d15]/95 backdrop-blur-md p-4 pb-2 justify-between">
         <button 
@@ -136,7 +136,7 @@ const ReviewScan: React.FC<ReviewScanProps> = ({ scannedRecipe, onSave, onRescan
 
       {/* Floating Confirmation Button */}
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-[#1c1d15] via-[#1c1d15] to-transparent pt-10 z-50">
-        <div className="max-w-[480px] mx-auto">
+        <div className="w-full">
           <button 
             onClick={() => onSave({ ...scannedRecipe, title, ingredients, instructions })}
             className="w-full bg-primary hover:bg-opacity-90 text-white text-lg font-bold py-4 rounded-full shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-transform"

@@ -11,7 +11,7 @@ interface SyncHistoryProps {
 
 const SyncHistory: React.FC<SyncHistoryProps> = ({ history, onBack, onClear, onResolve }) => {
   return (
-    <div className="bg-[#1c1d15] text-white min-h-screen flex flex-col font-sans max-w-[480px] mx-auto border-x border-white/5">
+    <div className="bg-[#1c1d15] text-white min-h-screen flex flex-col font-sans w-full">
       {/* Top Navigation Bar */}
       <header className="sticky top-0 z-10 bg-[#1c1d15]/95 backdrop-blur-md border-b border-white/5">
         <div className="flex items-center p-4 pb-2 justify-between w-full">
@@ -129,7 +129,7 @@ const SyncHistory: React.FC<SyncHistoryProps> = ({ history, onBack, onClear, onR
 
       {/* Bottom Action Bar */}
       <footer className="fixed bottom-0 left-0 right-0 p-4 pb-12 bg-gradient-to-t from-[#1c1d15] via-[#1c1d15]/95 to-transparent z-20">
-        <div className="max-w-[480px] mx-auto">
+        <div className="w-full">
           <button 
             onClick={onClear}
             className="w-full flex items-center justify-center h-16 bg-white/10 hover:bg-white/15 text-white text-base font-black rounded-full transition-all active:scale-[0.98] shadow-2xl border border-white/5"

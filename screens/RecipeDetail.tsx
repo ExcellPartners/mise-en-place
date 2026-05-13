@@ -289,24 +289,18 @@ const RecipeDetail: React.FC<RecipeDetailProps> = ({
           </div>
         )}
 
-        {/* Source section — only shows if any source data exists */}
         {(recipe.sourceName || recipe.sourceAuthor || recipe.sourceUrl) && (
-          <div className="mt-6 p-6 rounded-[2rem] bg-white/3 border border-white/8 flex flex-col gap-3">
+          <div className="mt-6 p-6 rounded-[2rem] bg-white/5 border border-white/10 flex flex-col gap-3">
             <div className="flex items-center gap-2 text-white/40">
               <span className="material-symbols-outlined text-lg">menu_book</span>
               <span className="text-[10px] font-black uppercase tracking-[0.2em]">Source</span>
             </div>
-            {recipe.sourceName && (
-              <p className="text-white font-bold text-sm leading-snug">{recipe.sourceName}</p>
-            )}
-            {recipe.sourceAuthor && (
-              <p className="text-white/50 text-xs font-medium">by {recipe.sourceAuthor}</p>
-            )}
+            {recipe.sourceName && <p className="text-white font-bold text-sm leading-snug">{recipe.sourceName}</p>}
+            {recipe.sourceAuthor && <p className="text-white/50 text-xs font-medium">by {recipe.sourceAuthor}</p>}
             {recipe.sourceUrl && (
               <a href={recipe.sourceUrl} target="_blank" rel="noopener noreferrer"
-                className="mt-1 flex items-center gap-2 text-[#636b2f] text-xs font-black uppercase tracking-widest active:opacity-70 transition-opacity"
-                onClick={(e) => e.stopPropagation()}
-              >
+                className="mt-1 flex items-center gap-2 text-[#636b2f] text-xs font-black uppercase tracking-widest active:opacity-70"
+                onClick={(e) => e.stopPropagation()}>
                 <span className="material-symbols-outlined text-base">open_in_new</span>
                 {recipe.sourceAuthor ? 'View Book' : 'Visit Website'}
               </a>

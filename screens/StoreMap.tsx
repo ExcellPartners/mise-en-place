@@ -6,7 +6,7 @@ interface StoreMapProps {
 
 const StoreMap: React.FC<StoreMapProps> = ({ onBack }) => {
   return (
-    <div className="bg-[#1c1d15] text-white flex flex-col h-screen overflow-hidden font-sans max-w-[480px] mx-auto border-x border-white/5 relative">
+    <div className="bg-[#1c1d15] text-white flex flex-col h-screen overflow-hidden font-sans w-full relative">
       {/* Header with Blur Effect */}
       <header className="sticky top-0 z-30 bg-[#1c1d15]/80 backdrop-blur-xl px-4 pt-6 pb-4 flex items-center border-b border-white/5">
         <button 
@@ -117,7 +117,7 @@ const StoreMap: React.FC<StoreMapProps> = ({ onBack }) => {
       </main>
 
       {/* Navigation Detail Bottom Sheet */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 max-w-[480px] mx-auto">
+      <div className="fixed bottom-0 left-0 right-0 z-40 w-full">
         <div className="flex justify-center mb-2">
           <div className="w-10 h-1 bg-white/20 rounded-full"></div>
         </div>

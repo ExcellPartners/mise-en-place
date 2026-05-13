@@ -328,8 +328,7 @@ const Planner: React.FC<PlannerProps> = ({
         </div>
       </main>
 
-      <div className="fixed bottom-0 left-0 right-0 z-40 px-4 pt-3 bg-gradient-to-t from-[#1c1d15] via-[#1c1d15]/95 to-transparent"
-        style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 84px)' }}>
+      <div className="fixed bottom-0 left-0 right-0 w-full z-40">
         <div className="px-4 pb-4 pt-4 bg-[#1c1d15]/95 backdrop-blur-xl flex flex-col gap-4 shadow-[0_-20px_50px_rgba(0,0,0,0.5)] border-t border-white/5">
           <button 
             onClick={() => setShowSummary(true)}
@@ -508,14 +507,13 @@ const Planner: React.FC<PlannerProps> = ({
       )}
 
       {selectorData && (
-        <IngredientSelector
-          recipe={selectorData.recipe}
-          servings={selectorData.servings}
-          pantry={pantry}
+        <IngredientSelector 
+          recipe={selectorData.recipe} 
+          servings={selectorData.servings} 
+          pantry={pantry} 
           shoppingList={shoppingList}
-          onClose={() => setSelectorData(null)}
-          onServingsChange={(s) => setSelectorData(prev => prev ? { ...prev, servings: s } : null)}
-          onConfirm={(ingredients) => { onAddToShopping?.(ingredients); setSelectorData(null); showThemedToast(`${ingredients.length} items added to trip`); }}
+          onClose={() => setSelectorData(null)} 
+          onConfirm={(ingredients) => { onAddToShopping?.(ingredients); setSelectorData(null); showThemedToast(`${ingredients.length} items added to trip`); }} 
         />
       )}
     </div>

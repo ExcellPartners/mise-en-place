@@ -29,7 +29,7 @@ const Preferences: React.FC<PreferencesProps> = ({ onBack, onManageStores }) => 
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-[#1c1d15] text-white font-display max-w-[480px] mx-auto border-x border-white/5 overflow-hidden">
+    <div className="flex flex-col min-h-screen bg-[#1c1d15] text-white font-display w-full overflow-hidden">
       {/* Header */}
       <header className="sticky top-0 z-20 bg-[#1c1d15]/80 backdrop-blur-xl px-4 pt-6 pb-4 flex items-center border-b border-white/5">
         <button 

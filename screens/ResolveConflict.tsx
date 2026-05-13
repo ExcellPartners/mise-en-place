@@ -82,7 +82,7 @@ const ResolveConflict: React.FC<ResolveConflictProps> = ({ onBack, onConfirm }) 
   };
 
   return (
-    <div className="bg-[#1c1d15] text-white font-sans overflow-hidden h-screen flex flex-col max-w-[480px] mx-auto border-x border-white/5">
+    <div className="bg-[#1c1d15] text-white font-sans overflow-hidden h-screen flex flex-col w-full">
       {/* Header */}
       <header className="flex items-center bg-[#1c1d15] p-4 pb-4 justify-between sticky top-0 z-10 border-b border-[#3b3e2e]">
         <button 
@@ -158,7 +158,7 @@ const ResolveConflict: React.FC<ResolveConflictProps> = ({ onBack, onConfirm }) 
       </main>
 
       {/* Floating Action Button */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 pb-12 bg-gradient-to-t from-[#1c1d15] via-[#1c1d15] to-transparent max-w-[480px] mx-auto z-30">
+      <div className="fixed bottom-0 left-0 right-0 p-4 pb-12 bg-gradient-to-t from-[#1c1d15] via-[#1c1d15] to-transparent w-full z-30">
         <button 
           onClick={onConfirm}
           className="flex w-full cursor-pointer items-center justify-center overflow-hidden rounded-full h-16 px-5 bg-primary text-white gap-2 text-lg font-bold shadow-2xl shadow-primary/20 active:scale-95 transition-transform"

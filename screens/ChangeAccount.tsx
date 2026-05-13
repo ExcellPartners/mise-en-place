@@ -58,7 +58,7 @@ const ChangeAccount: React.FC<ChangeAccountProps> = ({ currentAccount, onBack, o
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-[#0f110c] text-white font-display max-w-[480px] mx-auto border-x border-white/5 overflow-hidden">
+    <div className="flex flex-col min-h-screen bg-[#0f110c] text-white font-display w-full overflow-hidden">
       {/* Header */}
       <header className="sticky top-0 z-10 bg-[#0f110c]/80 backdrop-blur-md px-4 py-3 flex items-center justify-between header-safe-pt border-b border-white/5">
         <button onClick={onBack} className="flex items-center justify-center size-10 active:scale-90 transition-transform">

@@ -29,7 +29,7 @@ const SignUp: React.FC<SignUpProps> = ({ onBack }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-[1100] bg-[#0f110c] flex flex-col font-sans max-w-[480px] mx-auto overflow-hidden">
+    <div className="fixed inset-0 z-[1100] bg-[#0f110c] flex flex-col font-sans w-full overflow-hidden">
       <div className="absolute top-[-10%] right-[-20%] w-[80%] aspect-square bg-primary/10 rounded-full blur-[120px]"></div>
       
       <header className="relative z-10 flex items-center px-4 py-6 header-safe-pt">

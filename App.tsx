@@ -69,7 +69,10 @@ const App: React.FC = () => {
   const { accessToken, userEmail, userName, spreadsheetId, logout, isAuthenticated, isProfileComplete, completeProfile, login } = useAuth();
   const [viewStack, setViewStack] = useState<View[]>(() => !isAuthenticated ? ['login'] : !isProfileComplete ? ['onboarding'] : ['recipes']);
   
-  // Refs for scroll persistence
+  useEffect(() => {
+    if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+  }, []);
+
   const mainRef = useRef<HTMLElement>(null);
   const recipesScrollRef = useRef(0);
 
@@ -140,27 +143,17 @@ const App: React.FC = () => {
     if (activeView === 'recipes') {
       const savedPos = recipesScrollRef.current;
       requestAnimationFrame(() => {
-        setTimeout(() => {
-          if (mainRef.current) mainRef.current.scrollTop = savedPos;
-        }, 0);
-      });
-    } else if (activeView === 'recipeDetail') {
-      // Use multiple deferred resets — content painting pushes scroll down
-      mainRef.current.scrollTop = 0;
-      requestAnimationFrame(() => {
-        if (mainRef.current) mainRef.current.scrollTop = 0;
-        setTimeout(() => {
-          if (mainRef.current) mainRef.current.scrollTop = 0;
-        }, 50);
-        setTimeout(() => {
-          if (mainRef.current) mainRef.current.scrollTop = 0;
-        }, 150);
+        setTimeout(() => { if (mainRef.current) mainRef.current.scrollTop = savedPos; }, 0);
       });
     } else {
       mainRef.current.scrollTop = 0;
-      setTimeout(() => {
-        if (mainRef.current) mainRef.current.scrollTop = 0;
-      }, 0);
+      const el = mainRef.current;
+      let attempts = 0;
+      const poll = setInterval(() => {
+        if (el) el.scrollTop = 0;
+        attempts++;
+        if (attempts >= 10) clearInterval(poll);
+      }, 30);
     }
   }, [viewStack]);
 
@@ -512,6 +505,7 @@ const App: React.FC = () => {
     />;
 
     if (currentView === 'recipeDetail') return selectedRecipe ? <RecipeDetail 
+      key={selectedRecipe.id}
       recipe={selectedRecipe} 
       pantry={pantry} 
       isPinned={pinnedRecipeIds.includes(selectedRecipe.id)} 
@@ -587,14 +581,12 @@ const App: React.FC = () => {
       <main ref={mainRef} className="flex-1 overflow-y-auto no-scrollbar pb-24">{renderView()}</main>
 
       {isAuthenticated && isProfileComplete && !['login', 'onboarding', 'cookingMode', 'scanRecipe', 'addRecipeManual'].includes(viewStack[viewStack.length - 1]) && (
-        <nav className="fixed bottom-0 left-0 right-0 bg-[#0a0c0a]/95 backdrop-blur-xl border-t border-gray-800 z-[100] nav-safe-pb">
-          <div className="flex justify-around items-end px-4 pt-4 pb-2 w-full">
-            <button onClick={() => resetToView('recipes')} className={`flex flex-col items-center gap-1 transition-colors ${viewStack[viewStack.length-1] === 'recipes' ? 'text-primary' : 'text-gray-500'}`}><span className="material-symbols-outlined">home</span><span className="text-[10px] font-bold uppercase">Home</span></button>
-            <button onClick={() => resetToView('planner')} className={`flex flex-col items-center gap-1 transition-colors ${viewStack[viewStack.length-1] === 'planner' ? 'text-primary' : 'text-gray-500'}`}><span className="material-symbols-outlined">calendar_today</span><span className="text-[10px] font-medium uppercase">Planner</span></button>
-            <div className="relative -top-4"><button onClick={() => setIsAddOverlayOpen(true)} className="w-14 h-14 bg-primary rounded-full shadow-2xl flex items-center justify-center text-white ring-4 ring-[#0a0c0a]"><span className="material-symbols-outlined text-3xl font-bold">add</span></button></div>
-            <button onClick={() => resetToView('shopping')} className={`flex flex-col items-center gap-1 transition-colors ${viewStack[viewStack.length-1] === 'shopping' ? 'text-primary' : 'text-gray-500'}`}><span className="material-symbols-outlined">shopping_basket</span><span className="text-[10px] font-medium uppercase">Shopping</span></button>
-            <button onClick={() => resetToView('pantry')} className={`flex flex-col items-center gap-1 transition-colors ${viewStack[viewStack.length-1] === 'pantry' ? 'text-primary' : 'text-gray-500'}`}><span className="material-symbols-outlined">inventory_2</span><span className="text-[10px] font-medium uppercase">Pantry</span></button>
-          </div>
+        <nav className="fixed bottom-0 left-0 right-0 bg-[#0a0c0a]/95 backdrop-blur-xl border-t border-gray-800 px-4 py-3 pb-8 flex justify-around items-end z-[100] w-full">
+          <button onClick={() => resetToView('recipes')} className="flex flex-col items-center gap-1 text-gray-400"><span className="material-symbols-outlined">home</span><span className="text-[10px] font-bold uppercase">Home</span></button>
+          <button onClick={() => resetToView('planner')} className="flex flex-col items-center gap-1 text-gray-400"><span className="material-symbols-outlined">calendar_today</span><span className="text-[10px] font-medium uppercase">Planner</span></button>
+          <div className="relative -top-4"><button onClick={() => setIsAddOverlayOpen(true)} className="w-14 h-14 bg-primary rounded-full shadow-2xl flex items-center justify-center text-white ring-4 ring-[#0a0c0a]"><span className="material-symbols-outlined text-3xl font-bold">add</span></button></div>
+          <button onClick={() => resetToView('shopping')} className="flex flex-col items-center gap-1 text-gray-400"><span className="material-symbols-outlined">shopping_basket</span><span className="text-[10px] font-medium uppercase">Shopping</span></button>
+          <button onClick={() => resetToView('pantry')} className="flex flex-col items-center gap-1 text-gray-400"><span className="material-symbols-outlined">inventory_2</span><span className="text-[10px] font-medium uppercase">Pantry</span></button>
         </nav>
       )}
 
