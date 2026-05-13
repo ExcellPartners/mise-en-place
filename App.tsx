@@ -216,9 +216,13 @@ const App: React.FC = () => {
   };
 
   const navigateTo = (view: View) => {
-    // Save scroll position before leaving recipes view
-    if (viewStack[viewStack.length - 1] === 'recipes' && mainRef.current) {
-      recipesScrollRef.current = mainRef.current.scrollTop;
+    if (mainRef.current) {
+      // Save position if leaving recipes
+      if (viewStack[viewStack.length - 1] === 'recipes') {
+        recipesScrollRef.current = mainRef.current.scrollTop;
+      }
+      // Reset immediately — before React re-renders the new view
+      mainRef.current.scrollTop = 0;
     }
     setNavDirection('forward');
     setViewStack(prev => [...prev, view]);
