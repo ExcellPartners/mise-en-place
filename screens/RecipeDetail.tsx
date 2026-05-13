@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Recipe, PantryItem } from '../types';
 import { scaleIngredients, formatImageUrl } from '../utils/logic';
 import PrintPreview from './PrintPreview';
@@ -64,6 +64,21 @@ const RecipeDetail: React.FC<RecipeDetailProps> = ({
   };
 
   const finalHeroUrl = formatImageUrl(recipe.imageUrl);
+
+  // Lock scroll on mount then release — prevents browser scroll-to-sticky/focus behavior
+  const containerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    // Tell the parent scroll container to stay at top
+    const main = document.querySelector('main');
+    if (main) {
+      main.scrollTop = 0;
+      // Keep forcing top for 300ms to beat any browser paint/focus scroll
+      const t1 = setTimeout(() => { main.scrollTop = 0; }, 30);
+      const t2 = setTimeout(() => { main.scrollTop = 0; }, 100);
+      const t3 = setTimeout(() => { main.scrollTop = 0; }, 250);
+      return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
+    }
+  }, [recipe.id]);
 
   return (
     <div className="min-h-screen flex flex-col bg-background-dark overflow-x-hidden pb-32 relative">

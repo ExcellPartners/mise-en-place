@@ -153,6 +153,17 @@ const App: React.FC = () => {
   // Handle Scroll Restoration Logic
   const prevViewRef = useRef<string>('recipes');
 
+  // Force scroll to top whenever a new recipe is opened
+  useEffect(() => {
+    if (!selectedRecipe || !mainRef.current) return;
+    mainRef.current.scrollTop = 0;
+    const el = mainRef.current;
+    const t1 = setTimeout(() => { el.scrollTop = 0; }, 30);
+    const t2 = setTimeout(() => { el.scrollTop = 0; }, 100);
+    const t3 = setTimeout(() => { el.scrollTop = 0; }, 280);
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
+  }, [selectedRecipe?.id]);
+
   useEffect(() => {
     const activeView = viewStack[viewStack.length - 1];
     const prevView = prevViewRef.current;
