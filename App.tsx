@@ -153,17 +153,6 @@ const App: React.FC = () => {
   // Handle Scroll Restoration Logic
   const prevViewRef = useRef<string>('recipes');
 
-  // Force scroll to top whenever a new recipe is opened
-  useEffect(() => {
-    if (!selectedRecipe || !mainRef.current) return;
-    mainRef.current.scrollTop = 0;
-    const el = mainRef.current;
-    const t1 = setTimeout(() => { el.scrollTop = 0; }, 30);
-    const t2 = setTimeout(() => { el.scrollTop = 0; }, 100);
-    const t3 = setTimeout(() => { el.scrollTop = 0; }, 280);
-    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
-  }, [selectedRecipe?.id]);
-
   useEffect(() => {
     const activeView = viewStack[viewStack.length - 1];
     prevViewRef.current = activeView;
@@ -176,11 +165,6 @@ const App: React.FC = () => {
       });
     } else {
       mainRef.current.scrollTop = 0;
-      requestAnimationFrame(() => {
-        if (mainRef.current) mainRef.current.scrollTop = 0;
-        setTimeout(() => { if (mainRef.current) mainRef.current.scrollTop = 0; }, 50);
-        setTimeout(() => { if (mainRef.current) mainRef.current.scrollTop = 0; }, 150);
-      });
     }
   }, [viewStack]);
 
@@ -212,13 +196,8 @@ const App: React.FC = () => {
   };
 
   const navigateTo = (view: View) => {
-    if (mainRef.current) {
-      // Save position if leaving recipes
-      if (viewStack[viewStack.length - 1] === 'recipes') {
-        recipesScrollRef.current = mainRef.current.scrollTop;
-      }
-      // Reset immediately — before React re-renders the new view
-      mainRef.current.scrollTop = 0;
+    if (viewStack[viewStack.length - 1] === 'recipes' && mainRef.current) {
+      recipesScrollRef.current = mainRef.current.scrollTop;
     }
     setNavDirection('forward');
     setViewStack(prev => [...prev, view]);
@@ -546,19 +525,8 @@ const App: React.FC = () => {
       }}
     />;
 
-    if (currentView === 'recipeDetail') return selectedRecipe ? <RecipeDetail 
-      key={selectedRecipe.id}
-      recipe={selectedRecipe} 
-      pantry={pantry} 
-      isPinned={pinnedRecipeIds.includes(selectedRecipe.id)} 
-      isLiked={!!selectedRecipe.isFavorite} // Source of truth is now recipe property
-      onTogglePin={() => handleTogglePin(selectedRecipe.id)}
-      onToggleLike={() => handleToggleLike(selectedRecipe.id)}
-      onBack={handleBack} 
-      onCook={() => navigateTo('cookingMode')} 
-      onAddToPlanner={() => { handleTogglePin(selectedRecipe.id); }} 
-    /> : null;
-    
+    if (currentView === 'recipeDetail') return null; // Rendered as fixed overlay outside main
+
     if (currentView === 'cookingMode') return selectedRecipe ? <CookingMode recipe={selectedRecipe} onExit={handleBack} timer={timerState} onUpdateTimer={setTimerState} /> : null;
     
     if (currentView === 'editProfile') return <EditProfile 
@@ -622,10 +590,24 @@ const App: React.FC = () => {
     >
       <Toast message={toastState.message} isVisible={toastState.visible} />
       {isLoading && <SplashScreen progress={loadingProgress} />}
-      {viewStack[viewStack.length - 1] === 'recipes'
-        ? <main ref={mainRef} className="flex-1 overflow-y-auto no-scrollbar pb-24">{renderView()}</main>
-        : <main key={viewStack[viewStack.length - 1] + (selectedRecipe?.id ?? '')} ref={mainRef} className="flex-1 overflow-y-auto no-scrollbar pb-24">{renderView()}</main>
-      }
+      <main ref={mainRef} className="flex-1 overflow-y-auto no-scrollbar pb-24">{renderView()}</main>
+
+      {/* RecipeDetail renders as its own fixed overlay — completely outside main's scroll context */}
+      {viewStack[viewStack.length - 1] === 'recipeDetail' && selectedRecipe && (
+        <div key={selectedRecipe.id} className="fixed inset-0 z-[200] overflow-y-auto no-scrollbar bg-background-dark">
+          <RecipeDetail
+            recipe={selectedRecipe}
+            pantry={pantry}
+            isPinned={pinnedRecipeIds.includes(selectedRecipe.id)}
+            isLiked={!!selectedRecipe.isFavorite}
+            onTogglePin={() => handleTogglePin(selectedRecipe.id)}
+            onToggleLike={() => handleToggleLike(selectedRecipe.id)}
+            onBack={handleBack}
+            onCook={() => navigateTo('cookingMode')}
+            onAddToPlanner={() => { handleTogglePin(selectedRecipe.id); }}
+          />
+        </div>
+      )}
 
       {isAuthenticated && isProfileComplete && !['login', 'onboarding', 'cookingMode', 'scanRecipe', 'addRecipeManual'].includes(viewStack[viewStack.length - 1]) && (
         <nav className="fixed bottom-0 left-0 right-0 bg-[#0a0c0a]/95 backdrop-blur-xl border-t border-gray-800 z-[100] nav-safe-pb">
