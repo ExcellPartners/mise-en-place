@@ -102,11 +102,11 @@ const Collections: React.FC<CollectionsProps> = ({
     <div className="flex gap-4 overflow-x-auto px-4 pb-4 no-scrollbar">
       {items.map(item => (
         <button key={item.id} onClick={() => setSelectedTheme(item)}
-          className="relative w-[160px] h-[220px] shrink-0 rounded-[1.25rem] overflow-hidden group active:scale-95 transition-transform bg-[#1c1d15] border border-white/5">
+          className="relative w-[155px] h-[240px] shrink-0 rounded-[1.25rem] overflow-hidden group active:scale-95 transition-transform bg-[#1c1d15] border border-white/5">
           <img src={item.image} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-70" />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
-          <div className="absolute bottom-0 left-0 right-0 p-4 text-left">
-            <h3 className="text-white font-black text-sm leading-tight mb-1 line-clamp-2">{item.label}</h3>
+          <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/50 to-transparent" />
+          <div className="absolute bottom-0 left-0 right-0 p-3 text-left">
+            <h3 className="text-white font-black text-sm leading-tight mb-1">{item.label}</h3>
             <p className="text-[#b6baa1] text-[9px] font-medium leading-relaxed line-clamp-2 opacity-90">{item.description}</p>
           </div>
         </button>

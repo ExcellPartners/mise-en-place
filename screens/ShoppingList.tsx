@@ -49,6 +49,16 @@ const ShoppingList: React.FC<ShoppingListProps> = ({
   const touchStart = useRef<{x: number, y: number} | null>(null);
 
   const neededItems = useMemo(() => itemsFromState.filter(item => !item.inPantry), [itemsFromState]);
+
+  // Low stock: pantry has this item but recipe needs >50% of what's left
+  const lowStockWarnings = useMemo(() => {
+    if (!pantry?.length) return [];
+    return neededItems.filter(item => {
+      const pantryItem = pantry.find(p => p.name.toLowerCase() === item.name.toLowerCase());
+      if (!pantryItem || !pantryItem.quantity || pantryItem.quantity <= 0) return false;
+      return item.totalQuantityNeeded >= pantryItem.quantity * 0.5;
+    });
+  }, [neededItems, pantry]);
   
   const groupedItems = useMemo<Record<string, ShoppingListItem[]>>(() => {
     const DEPT_ORDER = [
@@ -229,6 +239,25 @@ const ShoppingList: React.FC<ShoppingListProps> = ({
               Clear Itinerary
             </button>
         </div>
+
+        {lowStockWarnings.length > 0 && (
+          <div className="mx-4 mb-4 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="material-symbols-outlined text-amber-400 text-lg">warning</span>
+              <p className="text-amber-400 text-[10px] font-black uppercase tracking-widest">Low Stock After This Shop</p>
+            </div>
+            <div className="flex flex-col gap-1">
+              {lowStockWarnings.map(item => {
+                const pantryItem = pantry?.find(p => p.name.toLowerCase() === item.name.toLowerCase());
+                return (
+                  <p key={item.name} className="text-amber-200/70 text-xs font-medium">
+                    {item.name} — need {item.totalQuantityNeeded} {item.unit}, only {pantryItem?.quantity} left
+                  </p>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {(Object.entries(groupedItems) as [string, ShoppingListItem[]][]).map(([header, items]) => {
           const isUnmapped = header === 'UNMAPPED';

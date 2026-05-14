@@ -139,6 +139,7 @@ const App: React.FC = () => {
   // Swipe Gesture State
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
+  const [touchStartY, setTouchStartY] = useState<number | null>(null);
 
   useEffect(() => {
     let progress = 0;
@@ -214,19 +215,18 @@ const App: React.FC = () => {
   const onTouchStart = (e: React.TouchEvent) => {
     setTouchEnd(null);
     setTouchStart(e.targetTouches[0].clientX);
+    setTouchStartY(e.targetTouches[0].clientY);
   };
 
   const onTouchMove = (e: React.TouchEvent) => setTouchEnd(e.targetTouches[0].clientX);
 
-  const onTouchEnd = () => {
-    if (!touchStart || !touchEnd) return;
-    const distance = touchStart - touchEnd;
-    // Lower threshold for easier swiping (Standard Back Gesture: Left to Right)
-    const isRightSwipe = distance < -50; 
-    
-    if (isRightSwipe && viewStack.length > 1) {
-      handleBack();
-    }
+  const onTouchEnd = (e: React.TouchEvent) => {
+    if (!touchStart || !touchEnd || !touchStartY) return;
+    const horizontalDistance = touchStart - touchEnd;
+    const verticalDistance = Math.abs(e.changedTouches[0].clientY - touchStartY);
+    // Only trigger if clearly horizontal (not a scroll) and far enough
+    const isRightSwipe = horizontalDistance < -80 && verticalDistance < 40;
+    if (isRightSwipe && viewStack.length > 1) handleBack();
   };
 
   const showToast = (msg: string) => {
@@ -586,7 +586,7 @@ const App: React.FC = () => {
       className="min-h-screen bg-[#000000] text-gray-200 flex flex-col overflow-hidden"
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
-      onTouchEnd={onTouchEnd}
+      onTouchEnd={(e) => onTouchEnd(e)}
     >
       <Toast message={toastState.message} isVisible={toastState.visible} />
       {isLoading && <SplashScreen progress={loadingProgress} />}
