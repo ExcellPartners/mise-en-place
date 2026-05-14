@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef } from 'react';
-import { Recipe, PantryItem } from '../types';
+import { Recipe, PantryItem, RecipeIngredient } from '../types';
 import { formatImageUrl } from '../utils/logic';
 
 interface CollectionsProps {
@@ -20,23 +20,65 @@ interface CollectionItem {
   description: string;
 }
 
-// ─── Multi-Filter Types ────────────────────────────────────────────────────────
+// ─── Helpers ───────────────────────────────────────────────────────────────────
+// Sheet values come back as strings — always coerce before comparing
+const n = (v: unknown): number => Number(v) || 0;
+const recipeTime = (r: Recipe) => n(r.prepTime) + n(r.cookTime);
+const recipeText = (r: Recipe) => `${r.title} ${r.category} ${r.description}`.toLowerCase();
+
+// ─── Category Filter ───────────────────────────────────────────────────────────
+
+const CATEGORIES = ['Main', 'Side', 'Appetizer', 'Dessert', 'Beverage', 'Breakfast'] as const;
+type Category = typeof CATEGORIES[number];
+
+const CATEGORY_EMOJI: Record<Category, string> = {
+  Main:      '🍽️',
+  Side:      '🥗',
+  Appetizer: '🧆',
+  Dessert:   '🍮',
+  Beverage:  '🥤',
+  Breakfast: '🥞',
+};
+
+const CategoryBar: React.FC<{
+  active: Set<Category>;
+  onToggle: (c: Category) => void;
+}> = ({ active, onToggle }) => (
+  <div className="flex gap-2 overflow-x-auto no-scrollbar px-4 py-2">
+    {CATEGORIES.map(cat => {
+      const on = active.has(cat);
+      return (
+        <button
+          key={cat}
+          onClick={() => onToggle(cat)}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full shrink-0 text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 ${
+            on
+              ? 'bg-[#636b2f] text-white border border-[#636b2f]'
+              : 'bg-white/5 text-white/40 border border-white/10'
+          }`}
+        >
+          <span className="text-sm leading-none">{CATEGORY_EMOJI[cat]}</span>
+          {cat}
+        </button>
+      );
+    })}
+  </div>
+);
+
+const applyCategories = (list: Recipe[], active: Set<Category>): Recipe[] => {
+  if (active.size === 0) return list;
+  return list.filter(r => active.has(r.category as Category));
+};
+
+// ─── Finder Filter Groups ──────────────────────────────────────────────────────
 
 interface FilterGroup {
   id: string;
   label: string;
   emoji: string;
-  options: FilterOption[];
-  // How this group scores a recipe. Returns 0 (no match) or 1 (match).
+  options: { label: string; value: string }[];
   score: (recipe: Recipe, selected: string[]) => number;
 }
-
-interface FilterOption {
-  label: string;
-  value: string;
-}
-
-// ─── Filter Definitions ────────────────────────────────────────────────────────
 
 const FILTER_GROUPS: FilterGroup[] = [
   {
@@ -50,12 +92,12 @@ const FILTER_GROUPS: FilterGroup[] = [
       { label: '60+ min',      value: 'over60'  },
     ],
     score: (r, selected) => {
-      const total = (r.prepTime || 0) + (r.cookTime || 0);
+      const t = recipeTime(r);
       return selected.some(v =>
-        (v === 'under20' && total < 20) ||
-        (v === '20to40'  && total >= 20 && total <= 40) ||
-        (v === '40to60'  && total > 40  && total <= 60) ||
-        (v === 'over60'  && total > 60)
+        (v === 'under20' && t < 20) ||
+        (v === '20to40'  && t >= 20 && t <= 40) ||
+        (v === '40to60'  && t > 40  && t <= 60) ||
+        (v === 'over60'  && t > 60)
       ) ? 1 : 0;
     },
   },
@@ -78,15 +120,18 @@ const FILTER_GROUPS: FilterGroup[] = [
     label: 'Protein',
     emoji: '🥩',
     options: [
-      { label: 'Chicken',    value: 'chicken'                    },
-      { label: 'Beef',       value: 'beef'                       },
-      { label: 'Pork',       value: 'pork'                       },
-      { label: 'Seafood',    value: 'seafood'                    },
-      { label: 'Fish',       value: 'fish'                       },
-      { label: 'Vegetarian', value: 'vegetarian'                 },
+      { label: 'Chicken',    value: 'chicken'    },
+      { label: 'Beef',       value: 'beef'       },
+      { label: 'Pork',       value: 'pork'       },
+      { label: 'Seafood',    value: 'seafood'    },
+      { label: 'Fish',       value: 'fish'       },
+      { label: 'Vegetarian', value: 'vegetarian' },
     ],
     score: (r, selected) => {
-      const text = `${r.title} ${r.description} ${r.category} ${(r.ingredients || []).map((i: { name: string }) => i.name).join(' ')}`.toLowerCase();
+      const text = [
+        r.title, r.description, r.category,
+        ...(r.ingredients || []).map((i: RecipeIngredient) => i.name)
+      ].join(' ').toLowerCase();
       return selected.some(v => text.includes(v)) ? 1 : 0;
     },
   },
@@ -95,25 +140,24 @@ const FILTER_GROUPS: FilterGroup[] = [
     label: 'Cuisine',
     emoji: '🌍',
     options: [
-      { label: 'American',      value: 'american'     },
-      { label: 'Italian',       value: 'italian'      },
-      { label: 'Mexican',       value: 'mexican'      },
-      { label: 'Asian',         value: 'asian'        },
-      { label: 'Mediterranean', value: 'mediterranean'},
-      { label: 'French',        value: 'french'       },
-      { label: 'Indian',        value: 'indian'       },
+      { label: 'American',      value: 'american'      },
+      { label: 'Italian',       value: 'italian'       },
+      { label: 'Mexican',       value: 'mexican'       },
+      { label: 'Asian',         value: 'asian'         },
+      { label: 'Mediterranean', value: 'mediterranean' },
+      { label: 'French',        value: 'french'        },
+      { label: 'Indian',        value: 'indian'        },
     ],
     score: (r, selected) => {
-      const text = `${r.title} ${r.description} ${r.category}`.toLowerCase();
-      // Expand some terms for better matching
+      const text = recipeText(r);
       const expansions: Record<string, string[]> = {
-        asian:         ['asian', 'chinese', 'japanese', 'korean', 'thai', 'vietnamese', 'soy', 'stir', 'ramen', 'sushi', 'teriyaki', 'curry'],
+        asian:         ['asian', 'chinese', 'japanese', 'korean', 'thai', 'vietnamese', 'soy', 'stir', 'ramen', 'sushi', 'teriyaki'],
         italian:       ['italian', 'pasta', 'pizza', 'risotto', 'lasagna', 'parmesan', 'marinara', 'pesto'],
         mexican:       ['mexican', 'taco', 'salsa', 'fajita', 'enchilada', 'guacamole', 'burrito', 'quesadilla'],
         mediterranean: ['mediterranean', 'greek', 'hummus', 'falafel', 'olive', 'tzatziki'],
         french:        ['french', 'bistro', 'coq au vin', 'ratatouille', 'beurre', 'gratin'],
         indian:        ['indian', 'curry', 'masala', 'tikka', 'naan', 'tandoori', 'dal'],
-        american:      ['american', 'burger', 'bbq', 'diner', 'mac and cheese', 'fried chicken', 'coleslaw'],
+        american:      ['american', 'burger', 'bbq', 'diner', 'mac and cheese', 'fried chicken'],
       };
       return selected.some(v => (expansions[v] || [v]).some(kw => text.includes(kw))) ? 1 : 0;
     },
@@ -129,12 +173,12 @@ const FILTER_GROUPS: FilterGroup[] = [
       { label: '❄️ Winter', value: 'winter' },
     ],
     score: (r, selected) => {
-      const text = `${r.title} ${r.description} ${r.category}`.toLowerCase();
+      const text = recipeText(r);
       const expansions: Record<string, string[]> = {
-        spring: ['spring', 'asparagus', 'pea', 'radish', 'artichoke', 'light', 'fresh herb'],
+        spring: ['spring', 'asparagus', 'pea', 'radish', 'artichoke', 'fresh herb'],
         summer: ['summer', 'grill', 'bbq', 'corn', 'tomato', 'zucchini', 'cold', 'salad'],
         fall:   ['fall', 'autumn', 'pumpkin', 'squash', 'apple', 'cider', 'harvest', 'mushroom'],
-        winter: ['winter', 'soup', 'stew', 'braise', 'roast', 'comfort', 'holiday', 'chili', 'warm'],
+        winter: ['winter', 'soup', 'stew', 'braise', 'roast', 'comfort', 'holiday', 'chili'],
       };
       return selected.some(v => (expansions[v] || [v]).some(kw => text.includes(kw))) ? 1 : 0;
     },
@@ -144,24 +188,25 @@ const FILTER_GROUPS: FilterGroup[] = [
     label: 'Vibe',
     emoji: '✨',
     options: [
-      { label: 'Comfort food',   value: 'comfort'   },
-      { label: 'Light & fresh',  value: 'light'     },
-      { label: 'Fancy / impress',value: 'fancy'     },
-      { label: 'Meal prep',      value: 'mealprep'  },
-      { label: 'One pot',        value: 'onepot'    },
-      { label: 'Quick weeknight',value: 'weeknight' },
+      { label: 'Comfort food',    value: 'comfort'   },
+      { label: 'Light & fresh',   value: 'light'     },
+      { label: 'Fancy / impress', value: 'fancy'     },
+      { label: 'Meal prep',       value: 'mealprep'  },
+      { label: 'One pot',         value: 'onepot'    },
+      { label: 'Quick weeknight', value: 'weeknight' },
     ],
     score: (r, selected) => {
-      const text = `${r.title} ${r.description} ${r.category}`.toLowerCase();
-      const total = (r.prepTime || 0) + (r.cookTime || 0);
+      const text = recipeText(r);
+      const t = recipeTime(r);
+      const servings = n(r.baseServings);
       return selected.some(v => {
         switch (v) {
           case 'comfort':   return text.includes('comfort') || text.includes('cozy') || text.includes('hearty') || text.includes('creamy');
           case 'light':     return text.includes('light') || text.includes('fresh') || text.includes('salad') || text.includes('lean');
           case 'fancy':     return text.includes('steak') || text.includes('risotto') || text.includes('roast') || text.includes('elegant') || text.includes('filet');
-          case 'mealprep':  return (r.baseServings || 0) >= 6 || text.includes('batch') || text.includes('prep') || text.includes('freeze');
+          case 'mealprep':  return servings >= 6 || text.includes('batch') || text.includes('prep') || text.includes('freeze');
           case 'onepot':    return text.includes('pot') || text.includes('pan') || text.includes('skillet') || text.includes('sheet');
-          case 'weeknight': return total <= 35;
+          case 'weeknight': return t > 0 && t <= 35;
           default:          return false;
         }
       }) ? 1 : 0;
@@ -198,6 +243,35 @@ const COLLECTIONS_DATA: Record<string, CollectionItem[]> = {
   ],
 };
 
+// ─── Collection theme matcher ──────────────────────────────────────────────────
+// Kept as a pure function so it's easy to test and extend
+const matchesTheme = (r: Recipe, themeId: string): boolean => {
+  const text = recipeText(r);
+  const t = recipeTime(r);
+  const servings = n(r.baseServings);
+  switch (themeId) {
+    case 'one-pot':       return text.includes('sheet') || text.includes('one pot') || text.includes('one-pot') || text.includes('skillet') || text.includes('dutch oven');
+    case 'sunday-prep':   return servings >= 6 || text.includes('batch') || text.includes('prep') || text.includes('freeze');
+    case 'table-two':     return servings === 2 || text.includes('for two') || text.includes('date night');
+    case 'pantry':        return text.includes('pasta') || text.includes('bean') || text.includes('canned') || text.includes('rice') || text.includes('lentil');
+    case 'social':        return r.category === 'Appetizer' || r.category === 'Beverage' || text.includes('dip') || text.includes('bite') || text.includes('cocktail') || text.includes('punch');
+    case '30-min':        return t > 0 && t <= 35;
+    case 'taco':          return text.includes('taco') || text.includes('mexican') || text.includes('salsa') || text.includes('fajita') || text.includes('enchilada') || text.includes('burrito');
+    case 'mediterranean': return text.includes('greek') || text.includes('lemon') || text.includes('olive') || text.includes('hummus') || text.includes('falafel') || text.includes('mediterranean');
+    case 'nostalgic':     return text.includes('mac') || text.includes('cheese') || text.includes('pie') || text.includes('roast') || text.includes('soup') || text.includes('meatloaf') || text.includes('casserole');
+    case 'street':        return text.includes('skewer') || text.includes('bao') || text.includes('sandwich') || text.includes('fried') || text.includes('wrap') || text.includes('slider');
+    case 'silk':          return text.includes('asian') || text.includes('curry') || text.includes('stir') || text.includes('soy') || text.includes('ramen') || text.includes('teriyaki') || text.includes('miso');
+    case 'trattoria':     return text.includes('pasta') || text.includes('italian') || text.includes('tomato') || text.includes('lasagna') || text.includes('risotto') || text.includes('pesto');
+    case 'americana':     return text.includes('burger') || text.includes('bbq') || text.includes('fried chicken') || text.includes('diner') || text.includes('coleslaw') || text.includes('hot dog');
+    case 'bistro':        return text.includes('french') || text.includes('steak') || text.includes('onion soup') || text.includes('wine') || text.includes('coq') || text.includes('gratin');
+    case 'holiday':       return text.includes('roast') || text.includes('turkey') || text.includes('ham') || text.includes('feast') || text.includes('stuffing') || text.includes('cranberry') || text.includes('prime rib');
+    case 'bbq':           return text.includes('grill') || text.includes('bbq') || text.includes('barbecue') || text.includes('burger') || text.includes('corn') || text.includes('ribs') || text.includes('smoked');
+    case 'harvest':       return text.includes('pumpkin') || text.includes('squash') || text.includes('apple') || text.includes('cider') || text.includes('harvest') || text.includes('sweet potato') || text.includes('pecan');
+    case 'spring':        return text.includes('asparagus') || text.includes('pea') || text.includes('radish') || text.includes('lemon') || text.includes('fresh herb') || text.includes('spring') || text.includes('artichoke');
+    default:              return false;
+  }
+};
+
 // ─── Component ─────────────────────────────────────────────────────────────────
 
 const Collections: React.FC<CollectionsProps> = ({
@@ -209,34 +283,48 @@ const Collections: React.FC<CollectionsProps> = ({
   const moneySaved = recentCount * 8;
   const mainRef = useRef<HTMLDivElement>(null);
 
-  // ── Finder state: Record<groupId, Set<optionValue>> ──────────────────────────
-  const [finderSelections, setFinderSelections] = useState<Record<string, Set<string>>>({});
-
-  const toggleOption = (groupId: string, value: string) => {
-    setFinderSelections(prev => {
-      const current = new Set(prev[groupId] || []);
-      if (current.has(value)) {
-        current.delete(value);
-      } else {
-        current.add(value);
-      }
-      return { ...prev, [groupId]: current };
+  // ── Shared category filter ──────────────────────────────────────────────────
+  const [activeCategories, setActiveCategories] = useState<Set<Category>>(new Set());
+  const toggleCategory = (cat: Category) => {
+    setActiveCategories(prev => {
+      const next = new Set(prev);
+      next.has(cat) ? next.delete(cat) : next.add(cat);
+      return next;
     });
   };
 
-  const clearAllFilters = () => setFinderSelections({});
+  // ── Finder state ────────────────────────────────────────────────────────────
+  const [finderSelections, setFinderSelections] = useState<Record<string, Set<string>>>({});
+  const toggleFinderOption = (groupId: string, value: string) => {
+    setFinderSelections(prev => {
+      const current = new Set(prev[groupId] || []);
+      current.has(value) ? current.delete(value) : current.add(value);
+      return { ...prev, [groupId]: current };
+    });
+  };
+  const clearAllFilters = () => {
+    setFinderSelections({});
+    setActiveCategories(new Set());
+  };
+  const activeFinderCount = Object.values(finderSelections).reduce((acc, s) => acc + s.size, 0);
 
-  const activeFilterCount = Object.values(finderSelections).reduce((acc, s) => acc + s.size, 0);
+  // ── Collection theme drill-down results ─────────────────────────────────────
+  const themeRecipesBase = useMemo(() => {
+    if (!selectedTheme) return [];
+    return recipes.filter(r => matchesTheme(r, selectedTheme.id));
+  }, [selectedTheme, recipes]);
 
-  // ── Finder results ────────────────────────────────────────────────────────────
-  // Only run scoring if at least one filter is active.
-  // Score = how many active filter GROUPS the recipe satisfies (0 → groupCount).
-  // Show recipes that satisfy at least 1 active group, sorted by score desc.
+  const filteredThemeRecipes = useMemo(
+    () => applyCategories(themeRecipesBase, activeCategories),
+    [themeRecipesBase, activeCategories]
+  );
+
+  // ── Finder results ──────────────────────────────────────────────────────────
   const finderResults = useMemo(() => {
     const activeGroups = FILTER_GROUPS.filter(g => (finderSelections[g.id]?.size || 0) > 0);
     if (activeGroups.length === 0) return [];
-
-    return recipes
+    const pool = applyCategories(recipes, activeCategories);
+    return pool
       .map(recipe => {
         const score = activeGroups.reduce((acc, group) => {
           const selected = Array.from(finderSelections[group.id] || []);
@@ -245,70 +333,61 @@ const Collections: React.FC<CollectionsProps> = ({
         return { recipe, score, total: activeGroups.length };
       })
       .filter(r => r.score > 0)
-      .sort((a, b) => b.score - a.score || (b.recipe.score || 0) - (a.recipe.score || 0));
-  }, [recipes, finderSelections]);
+      .sort((a, b) => b.score - a.score || n(b.recipe.score) - n(a.recipe.score));
+  }, [recipes, finderSelections, activeCategories]);
 
-  // ── Collection theme filtering ────────────────────────────────────────────────
-  const filteredRecipes = useMemo(() => {
-    if (!selectedTheme) return [];
-    return recipes.filter(r => {
-      const text = `${r.title} ${r.category} ${r.description}`.toLowerCase();
-      switch (selectedTheme.id) {
-        case 'one-pot':       return text.includes('sheet') || text.includes('pot') || text.includes('pan') || text.includes('skillet');
-        case 'sunday-prep':   return (r.baseServings || 0) >= 6 || text.includes('batch') || text.includes('prep');
-        case 'table-two':     return r.baseServings === 2 || text.includes('steak') || text.includes('risotto');
-        case 'pantry':        return text.includes('pasta') || text.includes('bean') || text.includes('canned') || text.includes('rice');
-        case 'social':        return ['Appetizer','Beverages','Beverage','Cocktail'].includes(r.category) || text.includes('dip');
-        case '30-min':        return ((r.prepTime || 0) + (r.cookTime || 0)) <= 35;
-        case 'taco':          return text.includes('taco') || text.includes('mexican') || text.includes('salsa') || text.includes('fajita');
-        case 'mediterranean': return text.includes('greek') || text.includes('lemon') || text.includes('olive') || text.includes('fish');
-        case 'nostalgic':     return text.includes('mac') || text.includes('cheese') || text.includes('pie') || text.includes('roast') || text.includes('soup');
-        case 'street':        return text.includes('skewer') || text.includes('bao') || text.includes('sandwich') || text.includes('fried');
-        case 'silk':          return text.includes('asian') || text.includes('curry') || text.includes('rice') || text.includes('stir') || text.includes('soy');
-        case 'trattoria':     return text.includes('pasta') || text.includes('italian') || text.includes('tomato') || text.includes('lasagna');
-        case 'americana':     return text.includes('burger') || text.includes('bbq') || text.includes('fry') || text.includes('diner');
-        case 'bistro':        return text.includes('french') || text.includes('steak') || text.includes('onion') || text.includes('wine');
-        case 'holiday':       return text.includes('roast') || text.includes('turkey') || text.includes('ham') || text.includes('feast');
-        case 'bbq':           return text.includes('grill') || text.includes('bbq') || text.includes('burger') || text.includes('corn');
-        case 'harvest':       return text.includes('pumpkin') || text.includes('squash') || text.includes('soup') || text.includes('stew') || text.includes('apple');
-        case 'spring':        return text.includes('salad') || text.includes('green') || text.includes('lemon') || text.includes('herb') || text.includes('asparagus');
-        default:              return true;
-      }
-    });
-  }, [selectedTheme, recipes]);
-
-  // ── Almost There ──────────────────────────────────────────────────────────────
-  const almostThereRecipes = useMemo(() => {
+  // ── Almost There ────────────────────────────────────────────────────────────
+  const almostThereBase = useMemo(() => {
     const inStockNames = new Set(
-      pantry.filter(p => (p.quantity ?? 0) > 0).map(p => p.name.toLowerCase().trim())
+      pantry
+        .filter(p => p.inStock || (p.quantity !== undefined && n(p.quantity) > 0))
+        .map(p => p.name.toLowerCase().trim())
     );
     return recipes
       .map(recipe => {
-        const missing = recipe.ingredients.filter(
-          (ing: { name: string }) => !inStockNames.has(ing.name.toLowerCase().trim())
+        const missing = (recipe.ingredients || []).filter(
+          (ing: RecipeIngredient) => !inStockNames.has(ing.name.toLowerCase().trim())
         );
-        return { recipe, missingCount: missing.length, missingNames: missing.map((i: { name: string }) => i.name) };
+        return { recipe, missingCount: missing.length, missingNames: missing.map(i => i.name) };
       })
       .filter(r => r.missingCount > 0 && r.missingCount <= 3)
-      .sort((a, b) => a.missingCount - b.missingCount)
-      .slice(0, 20);
+      .sort((a, b) => a.missingCount - b.missingCount);
   }, [recipes, pantry]);
 
-  // ── Cooked History ────────────────────────────────────────────────────────────
+  const almostThereRecipes = useMemo(() => {
+    const filtered = activeCategories.size === 0
+      ? almostThereBase
+      : almostThereBase.filter(({ recipe }) => activeCategories.has(recipe.category as Category));
+    return filtered.slice(0, 30);
+  }, [almostThereBase, activeCategories]);
+
+  // ── Cooked History ──────────────────────────────────────────────────────────
   const sortedHistory = useMemo(() => {
     return [...cookedHistory]
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       .slice(0, 50);
   }, [cookedHistory]);
 
-  // ── Render helpers ────────────────────────────────────────────────────────────
+  // ── Shared empty state ──────────────────────────────────────────────────────
+  const renderEmpty = (icon: string, title: string, body: string) => (
+    <div className="flex flex-col items-center justify-center py-20 text-center opacity-40 px-8">
+      <span className="text-5xl mb-4">{icon}</span>
+      <p className="font-bold text-base mb-1">{title}</p>
+      <p className="text-sm leading-relaxed">{body}</p>
+    </div>
+  );
 
+  // ── Collection card grid ────────────────────────────────────────────────────
   const renderCards = (items: CollectionItem[]) => (
     <div className="flex gap-4 overflow-x-auto px-4 pb-4 no-scrollbar">
       {items.map(item => (
         <button key={item.id} onClick={() => setSelectedTheme(item)}
           className="relative w-[155px] h-[240px] shrink-0 rounded-[1.25rem] overflow-hidden group active:scale-95 transition-transform bg-[#1c1d15] border border-white/5">
-          <img src={collectionImages[item.label] || item.image} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-70" alt={item.label} />
+          <img
+            src={collectionImages[item.label] || item.image}
+            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-70"
+            alt={item.label}
+          />
           <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/50 to-transparent" />
           <div className="absolute bottom-0 left-0 right-0 p-3 text-left">
             <h3 className="text-white font-black text-sm leading-tight mb-1">{item.label}</h3>
@@ -319,139 +398,7 @@ const Collections: React.FC<CollectionsProps> = ({
     </div>
   );
 
-  // ── Finder tab ────────────────────────────────────────────────────────────────
-
-  const renderFinder = () => {
-    const activeGroups = FILTER_GROUPS.filter(g => (finderSelections[g.id]?.size || 0) > 0);
-    const hasFilters = activeGroups.length > 0;
-
-    return (
-      <div className="pt-4">
-        {/* Filter groups */}
-        <div className="space-y-5 px-4 mb-6">
-          {FILTER_GROUPS.map(group => {
-            const selected = finderSelections[group.id] || new Set<string>();
-            return (
-              <div key={group.id}>
-                <div className="flex items-center gap-2 mb-2.5">
-                  <span className="text-base leading-none">{group.emoji}</span>
-                  <span className="text-white text-xs font-black uppercase tracking-widest">{group.label}</span>
-                  {selected.size > 0 && (
-                    <span className="ml-auto text-[#636b2f] text-[9px] font-black uppercase tracking-widest">
-                      {selected.size} selected
-                    </span>
-                  )}
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {group.options.map(opt => {
-                    const active = selected.has(opt.value);
-                    return (
-                      <button
-                        key={opt.value}
-                        onClick={() => toggleOption(group.id, opt.value)}
-                        className={`px-3 py-1.5 rounded-full text-xs font-black uppercase tracking-widest transition-all active:scale-95 ${
-                          active
-                            ? 'bg-[#636b2f] text-white border border-[#636b2f]'
-                            : 'bg-white/5 text-white/50 border border-white/10'
-                        }`}
-                      >
-                        {opt.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Results header */}
-        {hasFilters && (
-          <div className="px-4 mb-3 flex items-center justify-between">
-            <div>
-              <p className="text-white font-black text-base">
-                {finderResults.length} {finderResults.length === 1 ? 'match' : 'matches'}
-              </p>
-              <p className="text-[#636b2f] text-[9px] font-black uppercase tracking-widest mt-0.5">
-                Sorted by best fit · {activeGroups.length} filter{activeGroups.length > 1 ? 's' : ''} active
-              </p>
-            </div>
-            <button
-              onClick={clearAllFilters}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-white/40 text-[9px] font-black uppercase tracking-widest active:scale-95 transition-transform"
-            >
-              <span className="material-symbols-outlined text-sm">close</span>
-              Clear
-            </button>
-          </div>
-        )}
-
-        {/* Results list */}
-        {!hasFilters && (
-          <div className="flex flex-col items-center justify-center py-16 text-center opacity-40 px-8">
-            <span className="text-5xl mb-4">🎛️</span>
-            <p className="font-bold text-base mb-1">Pick what you're in the mood for</p>
-            <p className="text-sm">Select options above — any combination — and matching recipes appear instantly.</p>
-          </div>
-        )}
-
-        {hasFilters && finderResults.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-16 text-center opacity-40 px-8">
-            <span className="text-5xl mb-4">🤷</span>
-            <p className="font-bold text-base mb-1">No matches</p>
-            <p className="text-sm">Try removing a filter or two — your library may not have this exact combo yet.</p>
-          </div>
-        )}
-
-        {hasFilters && finderResults.length > 0 && (
-          <div className="px-4 space-y-3 pb-4">
-            {finderResults.map(({ recipe, score, total }) => {
-              const totalTime = (recipe.prepTime || 0) + (recipe.cookTime || 0);
-              const isPerfect = score === total;
-              return (
-                <div
-                  key={recipe.id}
-                  onClick={() => onRecipeSelect(recipe)}
-                  className="flex gap-4 p-3 bg-[#1c1d15] rounded-2xl border border-white/5 active:scale-[0.98] transition-transform cursor-pointer"
-                >
-                  <div className="w-20 h-20 rounded-xl overflow-hidden shrink-0 bg-white/5">
-                    <img
-                      src={formatImageUrl(recipe.imageUrl)}
-                      className="w-full h-full object-cover"
-                      alt={recipe.title}
-                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                    />
-                  </div>
-                  <div className="flex flex-col justify-center flex-1 min-w-0 py-1">
-                    <span className="text-[#636b2f] text-[9px] font-black uppercase tracking-widest mb-1">{recipe.category}</span>
-                    <h3 className="text-white font-bold text-sm leading-tight mb-2 line-clamp-2">{recipe.title}</h3>
-                    <div className="flex items-center gap-2">
-                      {/* Match badge */}
-                      <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full ${
-                        isPerfect
-                          ? 'bg-[#636b2f]/30 border border-[#636b2f]/50'
-                          : 'bg-white/5 border border-white/10'
-                      }`}>
-                        <span className={`text-[9px] font-black uppercase tracking-widest ${isPerfect ? 'text-[#a3ae6a]' : 'text-white/30'}`}>
-                          {isPerfect ? '✓ Perfect match' : `${score}/${total} filters`}
-                        </span>
-                      </div>
-                      {/* Time */}
-                      {totalTime > 0 && (
-                        <span className="text-white/30 text-[9px] font-bold uppercase tracking-widest">{totalTime}m</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  // ─── Selected theme drill-down ────────────────────────────────────────────────
+  // ─── Collection theme drill-down ────────────────────────────────────────────
 
   if (selectedTheme) {
     return (
@@ -462,33 +409,49 @@ const Collections: React.FC<CollectionsProps> = ({
           </button>
           <div className="flex-1 text-center">
             <h1 className="text-lg font-black tracking-tight uppercase">{selectedTheme.label}</h1>
-            <p className="text-[#636b2f] text-[9px] font-black uppercase tracking-[0.2em] mt-0.5">{filteredRecipes.length} Recipes</p>
+            <p className="text-[#636b2f] text-[9px] font-black uppercase tracking-[0.2em] mt-0.5">
+              {filteredThemeRecipes.length} Recipe{filteredThemeRecipes.length !== 1 ? 's' : ''}
+              {activeCategories.size > 0 ? ' · filtered' : ''}
+            </p>
           </div>
           <div className="w-10" />
         </header>
-        <main className="flex-1 p-4 pb-32">
-          {filteredRecipes.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-24 text-center opacity-40">
-              <span className="material-symbols-outlined text-6xl mb-4">search_off</span>
-              <p className="font-bold text-xl mb-2">No matches yet</p>
-              <p className="text-sm">Add more recipes to populate this collection.</p>
-            </div>
+
+        {/* Category bar */}
+        <div className="sticky top-[60px] z-10 bg-[#000000]/95 backdrop-blur-md border-b border-white/5 py-1">
+          <CategoryBar active={activeCategories} onToggle={toggleCategory} />
+        </div>
+
+        <main className="flex-1 pb-32 px-4 pt-4">
+          {filteredThemeRecipes.length === 0 ? (
+            activeCategories.size > 0
+              ? renderEmpty('🔍', 'No matches', 'No recipes in this collection match that dish type. Try clearing the filter.')
+              : renderEmpty('📭', 'No matches yet', 'Add more recipes to populate this collection.')
           ) : (
             <div className="grid grid-cols-2 gap-4">
-              {filteredRecipes.map(recipe => (
-                <div key={recipe.id} onClick={() => onRecipeSelect(recipe)} className="flex flex-col gap-2 cursor-pointer group">
-                  <div className="relative w-full aspect-square rounded-2xl overflow-hidden bg-[#1a1d14]">
-                    <img src={formatImageUrl(recipe.imageUrl)} alt={recipe.title}
-                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+              {filteredThemeRecipes.map(recipe => {
+                const t = recipeTime(recipe);
+                return (
+                  <div key={recipe.id} onClick={() => onRecipeSelect(recipe)} className="flex flex-col gap-2 cursor-pointer group">
+                    <div className="relative w-full aspect-square rounded-2xl overflow-hidden bg-[#1a1d14]">
+                      <img
+                        src={formatImageUrl(recipe.imageUrl)}
+                        alt={recipe.title}
+                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                      <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-sm">
+                        <span className="text-white/70 text-[8px] font-black uppercase tracking-widest">{recipe.category}</span>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-white text-sm font-black line-clamp-1 group-hover:text-[#636b2f] transition-colors">{recipe.title}</p>
+                      {t > 0 && <p className="text-white/40 text-[10px] font-bold uppercase tracking-widest">{t} MIN</p>}
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-white text-sm font-black line-clamp-1 group-hover:text-[#636b2f] transition-colors">{recipe.title}</p>
-                    <p className="text-white/40 text-[10px] font-bold uppercase tracking-widest">{(recipe.prepTime || 0) + (recipe.cookTime || 0)} MIN</p>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </main>
@@ -496,7 +459,7 @@ const Collections: React.FC<CollectionsProps> = ({
     );
   }
 
-  // ─── Main view ────────────────────────────────────────────────────────────────
+  // ─── Main view ──────────────────────────────────────────────────────────────
 
   return (
     <div className="bg-[#000000] min-h-screen text-white flex flex-col w-full">
@@ -511,14 +474,14 @@ const Collections: React.FC<CollectionsProps> = ({
         <div className="w-10" />
       </header>
 
-      {/* 4-tab bar */}
-      <div className="sticky top-[60px] z-10 px-4 pt-3 pb-2 bg-[#000000]/95 backdrop-blur-md border-b border-white/5">
-        <div className="flex gap-1.5 p-1 bg-white/5 rounded-2xl">
+      {/* Tab bar */}
+      <div className="sticky top-[60px] z-10 bg-[#000000]/95 backdrop-blur-md border-b border-white/5">
+        <div className="flex gap-1.5 p-1 mx-4 mt-3 mb-2 bg-white/5 rounded-2xl">
           {([
-            { id: 'collections', label: 'Browse',  icon: 'collections_bookmark' },
-            { id: 'finder',      label: 'Finder',  icon: 'tune',                badge: activeFilterCount },
-            { id: 'almostThere', label: 'Almost',  icon: 'kitchen'              },
-            { id: 'history',     label: 'History', icon: 'history'              },
+            { id: 'collections', label: 'Browse',  icon: 'collections_bookmark', badge: 0 },
+            { id: 'finder',      label: 'Finder',  icon: 'tune',                 badge: activeFinderCount + activeCategories.size },
+            { id: 'almostThere', label: 'Almost',  icon: 'kitchen',              badge: 0 },
+            { id: 'history',     label: 'History', icon: 'history',              badge: 0 },
           ] as const).map(tab => (
             <button key={tab.id} onClick={() => setActiveSection(tab.id)}
               className={`flex-1 relative flex flex-col items-center py-2 rounded-xl transition-all gap-0.5 ${
@@ -526,7 +489,7 @@ const Collections: React.FC<CollectionsProps> = ({
               }`}>
               <span className="material-symbols-outlined text-lg">{tab.icon}</span>
               <span className="text-[7.5px] font-black uppercase tracking-widest leading-none">{tab.label}</span>
-              {'badge' in tab && tab.badge > 0 && (
+              {tab.badge > 0 && (
                 <span className="absolute top-1 right-2 w-4 h-4 rounded-full bg-white text-[#636b2f] text-[8px] font-black flex items-center justify-center leading-none">
                   {tab.badge}
                 </span>
@@ -534,6 +497,13 @@ const Collections: React.FC<CollectionsProps> = ({
             </button>
           ))}
         </div>
+
+        {/* Category bar — Finder and Almost There only */}
+        {(activeSection === 'finder' || activeSection === 'almostThere') && (
+          <div className="border-t border-white/5 py-1">
+            <CategoryBar active={activeCategories} onToggle={toggleCategory} />
+          </div>
+        )}
       </div>
 
       <main ref={mainRef} className="flex-1 pb-32 overflow-y-auto">
@@ -582,56 +552,172 @@ const Collections: React.FC<CollectionsProps> = ({
         )}
 
         {/* ── FINDER tab ── */}
-        {activeSection === 'finder' && renderFinder()}
+        {activeSection === 'finder' && (() => {
+          const activeGroups = FILTER_GROUPS.filter(g => (finderSelections[g.id]?.size || 0) > 0);
+          const hasAnyFilter = activeGroups.length > 0 || activeCategories.size > 0;
+          const hasScoreableFilter = activeGroups.length > 0;
+
+          return (
+            <div className="pt-4">
+              {/* Filter groups */}
+              <div className="space-y-5 px-4 mb-6">
+                {FILTER_GROUPS.map(group => {
+                  const selected = finderSelections[group.id] || new Set<string>();
+                  return (
+                    <div key={group.id}>
+                      <div className="flex items-center gap-2 mb-2.5">
+                        <span className="text-base leading-none">{group.emoji}</span>
+                        <span className="text-white text-xs font-black uppercase tracking-widest">{group.label}</span>
+                        {selected.size > 0 && (
+                          <span className="ml-auto text-[#636b2f] text-[9px] font-black uppercase tracking-widest">
+                            {selected.size} selected
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {group.options.map(opt => {
+                          const active = selected.has(opt.value);
+                          return (
+                            <button
+                              key={opt.value}
+                              onClick={() => toggleFinderOption(group.id, opt.value)}
+                              className={`px-3 py-1.5 rounded-full text-xs font-black uppercase tracking-widest transition-all active:scale-95 ${
+                                active
+                                  ? 'bg-[#636b2f] text-white border border-[#636b2f]'
+                                  : 'bg-white/5 text-white/50 border border-white/10'
+                              }`}
+                            >
+                              {opt.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Results header */}
+              {hasScoreableFilter && (
+                <div className="px-4 mb-3 flex items-center justify-between">
+                  <div>
+                    <p className="text-white font-black text-base">
+                      {finderResults.length} {finderResults.length === 1 ? 'match' : 'matches'}
+                    </p>
+                    <p className="text-[#636b2f] text-[9px] font-black uppercase tracking-widest mt-0.5">
+                      Sorted by best fit
+                      {activeCategories.size > 0 ? ` · ${CATEGORIES.filter(c => activeCategories.has(c)).join(', ')}` : ''}
+                    </p>
+                  </div>
+                  {hasAnyFilter && (
+                    <button
+                      onClick={clearAllFilters}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-white/40 text-[9px] font-black uppercase tracking-widest active:scale-95 transition-transform"
+                    >
+                      <span className="material-symbols-outlined text-sm">close</span>
+                      Clear all
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {!hasAnyFilter && renderEmpty('🎛️', 'Pick what you\'re in the mood for', 'Select any combination above and matches appear instantly. Skip any group you don\'t care about.')}
+              {hasScoreableFilter && finderResults.length === 0 && renderEmpty('🤷', 'No matches', 'Try removing a filter or two — your library may not have this exact combination yet.')}
+
+              {hasScoreableFilter && finderResults.length > 0 && (
+                <div className="px-4 space-y-3 pb-4">
+                  {finderResults.map(({ recipe, score, total }) => {
+                    const t = recipeTime(recipe);
+                    const isPerfect = score === total;
+                    return (
+                      <div
+                        key={recipe.id}
+                        onClick={() => onRecipeSelect(recipe)}
+                        className="flex gap-4 p-3 bg-[#1c1d15] rounded-2xl border border-white/5 active:scale-[0.98] transition-transform cursor-pointer"
+                      >
+                        <div className="w-20 h-20 rounded-xl overflow-hidden shrink-0 bg-white/5">
+                          <img
+                            src={formatImageUrl(recipe.imageUrl)}
+                            className="w-full h-full object-cover"
+                            alt={recipe.title}
+                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                          />
+                        </div>
+                        <div className="flex flex-col justify-center flex-1 min-w-0 py-1">
+                          <span className="text-[#636b2f] text-[9px] font-black uppercase tracking-widest mb-1">{recipe.category}</span>
+                          <h3 className="text-white font-bold text-sm leading-tight mb-2 line-clamp-2">{recipe.title}</h3>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full ${
+                              isPerfect ? 'bg-[#636b2f]/30 border border-[#636b2f]/50' : 'bg-white/5 border border-white/10'
+                            }`}>
+                              <span className={`text-[9px] font-black uppercase tracking-widest ${isPerfect ? 'text-[#a3ae6a]' : 'text-white/30'}`}>
+                                {isPerfect ? '✓ Perfect match' : `${score}/${total} filters`}
+                              </span>
+                            </div>
+                            {t > 0 && <span className="text-white/30 text-[9px] font-bold uppercase tracking-widest">{t}m</span>}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* ── ALMOST THERE tab ── */}
         {activeSection === 'almostThere' && (
-          <div className="px-4 pt-6">
-            <h2 className="text-xl font-black text-white tracking-tight mb-1">Almost There</h2>
-            <p className="text-[#b6baa1] text-sm font-medium leading-relaxed mb-6">Recipes you can make with just a few more ingredients.</p>
-            {pantry.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-24 text-center opacity-40 px-8">
-                <span className="material-symbols-outlined text-6xl mb-4">kitchen</span>
-                <p className="font-bold text-xl mb-2">Pantry not loaded</p>
-                <p className="text-sm">Sync your Google Sheet to see recommendations.</p>
-              </div>
-            ) : almostThereRecipes.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-24 text-center opacity-40 px-8">
-                <span className="material-symbols-outlined text-6xl mb-4">check_circle</span>
-                <p className="font-bold text-xl mb-2">You're well stocked!</p>
-                <p className="text-sm">No recipes are missing 3 or fewer ingredients.</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 gap-4">
-                {almostThereRecipes.map(({ recipe, missingCount, missingNames }) => (
-                  <div key={recipe.id} onClick={() => onRecipeSelect(recipe)}
-                    className="flex gap-4 p-3 bg-[#1c1d15] rounded-2xl border border-white/5 active:scale-[0.98] transition-transform cursor-pointer">
-                    <div className="w-20 h-20 rounded-xl overflow-hidden shrink-0 bg-white/5">
-                      <img src={formatImageUrl(recipe.imageUrl)} className="w-full h-full object-cover" alt={recipe.title}
-                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                    </div>
-                    <div className="flex flex-col justify-center flex-1 min-w-0 py-1">
-                      <span className="text-[#636b2f] text-[9px] font-black uppercase tracking-widest mb-1">{recipe.category}</span>
-                      <h3 className="text-white font-bold text-base leading-tight mb-1.5 line-clamp-1">{recipe.title}</h3>
-                      <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full w-fit ${
-                        missingCount === 1 ? 'bg-emerald-500/20 border border-emerald-500/30'
-                        : missingCount === 2 ? 'bg-amber-500/20 border border-amber-500/30'
-                        : 'bg-orange-500/20 border border-orange-500/30'
-                      }`}>
-                        <span className={`material-symbols-outlined text-sm ${
-                          missingCount === 1 ? 'text-emerald-400' : missingCount === 2 ? 'text-amber-400' : 'text-orange-400'
-                        }`}>shopping_cart</span>
-                        <span className={`text-[9px] font-black uppercase tracking-widest ${
-                          missingCount === 1 ? 'text-emerald-400' : missingCount === 2 ? 'text-amber-400' : 'text-orange-400'
-                        }`}>
-                          Need {missingCount}: {missingNames.slice(0, 2).join(', ')}{missingNames.length > 2 ? '…' : ''}
-                        </span>
+          <div className="px-4 pt-4">
+            <div className="mb-5">
+              <h2 className="text-xl font-black text-white tracking-tight mb-1">Almost There</h2>
+              <p className="text-[#b6baa1] text-sm font-medium leading-relaxed">
+                Recipes missing 3 or fewer ingredients from your pantry.
+                {activeCategories.size > 0 && <span className="text-[#636b2f]"> Dish type filtered.</span>}
+              </p>
+            </div>
+            {pantry.length === 0
+              ? renderEmpty('🧺', 'Pantry not loaded', 'Sync your Google Sheet to see recommendations.')
+              : almostThereRecipes.length === 0
+                ? activeCategories.size > 0
+                  ? renderEmpty('🔍', 'No matches', 'No almost-ready recipes match that dish type.')
+                  : renderEmpty('✅', "You're well stocked!", 'No recipes are within 3 ingredients of being cookable.')
+                : (
+                  <div className="space-y-3">
+                    {almostThereRecipes.map(({ recipe, missingCount, missingNames }) => (
+                      <div key={recipe.id} onClick={() => onRecipeSelect(recipe)}
+                        className="flex gap-4 p-3 bg-[#1c1d15] rounded-2xl border border-white/5 active:scale-[0.98] transition-transform cursor-pointer">
+                        <div className="w-20 h-20 rounded-xl overflow-hidden shrink-0 bg-white/5">
+                          <img
+                            src={formatImageUrl(recipe.imageUrl)}
+                            className="w-full h-full object-cover"
+                            alt={recipe.title}
+                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                          />
+                        </div>
+                        <div className="flex flex-col justify-center flex-1 min-w-0 py-1">
+                          <span className="text-[#636b2f] text-[9px] font-black uppercase tracking-widest mb-1">{recipe.category}</span>
+                          <h3 className="text-white font-bold text-base leading-tight mb-1.5 line-clamp-1">{recipe.title}</h3>
+                          <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full w-fit ${
+                            missingCount === 1 ? 'bg-emerald-500/20 border border-emerald-500/30'
+                            : missingCount === 2 ? 'bg-amber-500/20 border border-amber-500/30'
+                            : 'bg-orange-500/20 border border-orange-500/30'
+                          }`}>
+                            <span className={`material-symbols-outlined text-sm ${
+                              missingCount === 1 ? 'text-emerald-400' : missingCount === 2 ? 'text-amber-400' : 'text-orange-400'
+                            }`}>shopping_cart</span>
+                            <span className={`text-[9px] font-black uppercase tracking-widest ${
+                              missingCount === 1 ? 'text-emerald-400' : missingCount === 2 ? 'text-amber-400' : 'text-orange-400'
+                            }`}>
+                              Need {missingCount}: {missingNames.slice(0, 2).join(', ')}{missingNames.length > 2 ? '…' : ''}
+                            </span>
+                          </div>
+                        </div>
                       </div>
-                    </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            )}
+                )
+            }
           </div>
         )}
 
@@ -640,47 +726,48 @@ const Collections: React.FC<CollectionsProps> = ({
           <div className="px-4 pt-6">
             <h2 className="text-xl font-black text-white tracking-tight mb-1">Cooked History</h2>
             <p className="text-[#b6baa1] text-sm font-medium mb-6">Every recipe you've made, in order.</p>
-            {sortedHistory.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-24 text-center opacity-40 px-8">
-                <span className="material-symbols-outlined text-6xl mb-4">history</span>
-                <p className="font-bold text-xl mb-2">No history yet</p>
-                <p className="text-sm">Mark recipes as Cooked in the Planner and they'll show up here.</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {sortedHistory.map((entry, idx) => {
-                  const recipe = recipes.find(r => r.id === entry.recipeId);
-                  const dateStr = entry.date
-                    ? new Date(entry.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-                    : 'Unknown date';
-                  return (
-                    <div key={`${entry.recipeId}-${idx}`} onClick={() => recipe && onRecipeSelect(recipe)}
-                      className={`flex gap-4 p-3 bg-[#1c1d15] rounded-2xl border border-white/5 transition-transform ${recipe ? 'active:scale-[0.98] cursor-pointer' : 'opacity-60'}`}>
-                      <div className="w-16 h-16 rounded-xl overflow-hidden shrink-0 bg-white/5">
-                        {recipe ? (
-                          <img src={formatImageUrl(recipe.imageUrl)} className="w-full h-full object-cover" alt={recipe.title}
-                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <span className="material-symbols-outlined text-white/20 text-2xl">restaurant</span>
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex flex-col justify-center flex-1 min-w-0">
-                        <p className="text-white font-bold text-base leading-tight line-clamp-1">
-                          {entry.recipeName || recipe?.title || 'Unknown Recipe'}
-                        </p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="material-symbols-outlined text-[#636b2f] text-sm">calendar_today</span>
-                          <span className="text-[#636b2f] text-[10px] font-black uppercase tracking-widest">{dateStr}</span>
+            {sortedHistory.length === 0
+              ? renderEmpty('📅', 'No history yet', "Mark recipes as Cooked in the Planner and they'll show up here.")
+              : (
+                <div className="space-y-3">
+                  {sortedHistory.map((entry, idx) => {
+                    const recipe = recipes.find(r => r.id === entry.recipeId);
+                    const dateStr = entry.date
+                      ? new Date(entry.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                      : 'Unknown date';
+                    return (
+                      <div key={`${entry.recipeId}-${idx}`} onClick={() => recipe && onRecipeSelect(recipe)}
+                        className={`flex gap-4 p-3 bg-[#1c1d15] rounded-2xl border border-white/5 transition-transform ${recipe ? 'active:scale-[0.98] cursor-pointer' : 'opacity-60'}`}>
+                        <div className="w-16 h-16 rounded-xl overflow-hidden shrink-0 bg-white/5">
+                          {recipe ? (
+                            <img
+                              src={formatImageUrl(recipe.imageUrl)}
+                              className="w-full h-full object-cover"
+                              alt={recipe.title}
+                              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <span className="material-symbols-outlined text-white/20 text-2xl">restaurant</span>
+                            </div>
+                          )}
                         </div>
+                        <div className="flex flex-col justify-center flex-1 min-w-0">
+                          <p className="text-white font-bold text-base leading-tight line-clamp-1">
+                            {entry.recipeName || recipe?.title || 'Unknown Recipe'}
+                          </p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="material-symbols-outlined text-[#636b2f] text-sm">calendar_today</span>
+                            <span className="text-[#636b2f] text-[10px] font-black uppercase tracking-widest">{dateStr}</span>
+                          </div>
+                        </div>
+                        {recipe && <span className="material-symbols-outlined text-white/20 text-xl self-center">chevron_right</span>}
                       </div>
-                      {recipe && <span className="material-symbols-outlined text-white/20 text-xl self-center">chevron_right</span>}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                    );
+                  })}
+                </div>
+              )
+            }
           </div>
         )}
 
