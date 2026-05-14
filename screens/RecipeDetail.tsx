@@ -68,7 +68,7 @@ const RecipeDetail: React.FC<RecipeDetailProps> = ({
 
 
   return (
-    <div className="min-h-screen flex flex-col bg-background-dark overflow-x-hidden pb-32 relative">
+    <div className="min-h-screen flex flex-col bg-background-dark overflow-x-hidden pb-52 relative">
       <div 
         className="fixed left-0 right-0 z-50 flex items-center justify-between p-4 bg-transparent no-print header-safe-pt"
       >
