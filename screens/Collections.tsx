@@ -10,6 +10,7 @@ interface CollectionsProps {
   recentCount: number;
   pantry?: PantryItem[];
   cookedHistory?: { date: string; recipeId: string; recipeName?: string }[];
+  collectionImages?: Record<string, string>;
 }
 
 interface CollectionItem {
@@ -48,7 +49,7 @@ const COLLECTIONS_DATA: Record<string, CollectionItem[]> = {
 
 const Collections: React.FC<CollectionsProps> = ({
   recipes, onBack, onRecipeSelect, onPlannerOpen, recentCount,
-  pantry = [], cookedHistory = []
+  pantry = [], cookedHistory = [], collectionImages = {}
 }) => {
   const [selectedTheme, setSelectedTheme] = useState<CollectionItem | null>(null);
   const [activeSection, setActiveSection] = useState<'collections' | 'almostThere' | 'history'>('collections');
@@ -103,7 +104,7 @@ const Collections: React.FC<CollectionsProps> = ({
       {items.map(item => (
         <button key={item.id} onClick={() => setSelectedTheme(item)}
           className="relative w-[155px] h-[240px] shrink-0 rounded-[1.25rem] overflow-hidden group active:scale-95 transition-transform bg-[#1c1d15] border border-white/5">
-          <img src={item.image} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-70" />
+          <img src={collectionImages[item.label] || item.image} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-70" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/50 to-transparent" />
           <div className="absolute bottom-0 left-0 right-0 p-3 text-left">
             <h3 className="text-white font-black text-sm leading-tight mb-1">{item.label}</h3>

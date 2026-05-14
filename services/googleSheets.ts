@@ -37,12 +37,13 @@ export async function fetchFullAppData(
       return data.values || [];
     };
 
-    const [recipeRows, ingredientRows, componentRows, myItemRows, pantryRows] = await Promise.all([
+    const [recipeRows, ingredientRows, componentRows, myItemRows, pantryRows, collectionImageRows] = await Promise.all([
       fetchTab('Recipes'),
       fetchTab('Ingredients'),
       fetchTab('Components'),
       fetchTab('My Items'),
-      fetchTab('Pantry Stock')
+      fetchTab('Pantry Stock'),
+      fetchTab('Collection Images')
     ]);
 
     const pantry: PantryItem[] = (pantryRows || []).map(row => {
@@ -158,7 +159,14 @@ export async function fetchFullAppData(
       };
     }).filter((r): r is Recipe => r !== null);
 
-    return { recipes, masters, storeMappings, myItems, pantry };
+    const collectionImages: Record<string, string> = {};
+    (collectionImageRows || []).forEach(row => {
+      const name = safeGet(row, 0).trim();
+      const url = safeGet(row, 1).trim();
+      if (name && url) collectionImages[name] = url;
+    });
+
+    return { recipes, masters, storeMappings, myItems, pantry, collectionImages };
   } catch (err) { return null; }
 }
 

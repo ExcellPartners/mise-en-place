@@ -78,6 +78,7 @@ const App: React.FC = () => {
   const recipePageRef = useRef(1);
 
   const [recipesList, setRecipesList] = useState<Recipe[]>([]);
+  const [collectionImages, setCollectionImages] = useState<Record<string, string>>({});
   const [masterIngredients, setMasterIngredients] = useState<MasterIngredient[]>([]);
   const [myItemsList, setMyItemsList] = useState<MyItem[]>([]);
   const [mappings, setMappings] = useState<StoreMapping[]>([]);
@@ -180,6 +181,7 @@ const App: React.FC = () => {
         setMappings(data.storeMappings); 
         setMyItemsList(data.myItems); 
         if (data.pantry) setPantry(data.pantry);
+        if (data.collectionImages) setCollectionImages(data.collectionImages);
         
         // Sync Likes from Column N
         const remoteLikes = data.recipes.filter(r => r.isFavorite).map(r => r.id);
@@ -457,6 +459,7 @@ const App: React.FC = () => {
       onPlannerOpen={() => navigateTo('planner')}
       pantry={pantry}
       cookedHistory={cookedHistory}
+      collectionImages={collectionImages}
     />;
 
     if (currentView === 'planner') return <Planner 
