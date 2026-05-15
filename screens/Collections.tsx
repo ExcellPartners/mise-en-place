@@ -124,7 +124,7 @@ const QUIZ_STEPS: QuizStep[] = [
   },
   {
     id: 'inseason',
-    question: 'Want to use what's in season right now?',
+    question: "Want to use what's in season right now?",
     emoji: '🥬',
     options: [
       { label: 'Yes — peak season only', value: 'yes' },

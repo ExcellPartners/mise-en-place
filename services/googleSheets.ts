@@ -277,26 +277,48 @@ export async function removeMealPlanFromSheet(_spreadsheetId: string, recipeId: 
 // ── Pantry ─────────────────────────────────────────────────────────────────────
 export async function restockPantryFromShopping(_spreadsheetId: string, items: ShoppingListItem[], _accessToken: string | null): Promise<boolean> {
   try {
-    const res = await fetch(`${GOOGLE_SHEETS_API_BASE}/${ID}/values/Pantry%20Stock!A:F?key=${KEY}`);
+    // Read full pantry including col G (LastPurchasedDate)
+    const res = await fetch(`${GOOGLE_SHEETS_API_BASE}/${ID}/values/Pantry%20Stock!A:G?key=${KEY}`);
     const data = await res.json();
-    const rows = data.values || [];
+    const rows: any[][] = data.values || [];
     const today = new Date().toLocaleDateString();
 
     for (const item of items) {
-      if (item.source !== 'recipe') continue; // myItem and manual don't touch pantry
-      const rowIdx = rows.findIndex((r: any[]) => r[0]?.toLowerCase().trim() === item.name.toLowerCase().trim());
-      const currentQty = rowIdx !== -1 ? parseFloat(rows[rowIdx][3]) || 0 : 0;
-      const finalQty = currentQty + item.unitsToBuy * item.unitsPerPurchase;
+      // Only recipe-sourced items touch pantry; manual quick-adds and myItems do not
+      if (item.source !== 'recipe') continue;
+
+      // Find existing row by name (case-insensitive, trimmed)
+      const rowIdx = rows.findIndex(r =>
+        (r[0] || '').toLowerCase().trim() === item.name.toLowerCase().trim()
+      );
+
+      const addedQty = (item.unitsToBuy || 1) * (item.unitsPerPurchase || 1);
 
       if (rowIdx !== -1) {
+        // Row exists — ADD to current quantity, update date in ColG
+        const currentQty = parseFloat(rows[rowIdx][3]) || 0;
+        const finalQty = currentQty + addedQty;
         const range = `Pantry Stock!D${rowIdx + 1}:G${rowIdx + 1}`;
-        await sheetWrite(putUrl(range), { range, majorDimension: 'ROWS', values: [[finalQty, item.unit, '', today]] }, 'PUT');
+        await sheetWrite(
+          putUrl(range),
+          { range, majorDimension: 'ROWS', values: [[finalQty, item.unit, '', today]] },
+          'PUT'
+        );
+        // Update our local copy so subsequent items in the same batch see correct qty
+        rows[rowIdx][3] = String(finalQty);
+        rows[rowIdx][6] = today;
       } else {
-        await sheetWrite(appendUrl('Pantry Stock', 'A:G'), { range: 'Pantry Stock!A:G', majorDimension: 'ROWS', values: [[item.name, 'Yes', 'No', finalQty, item.unit, '', today]] });
+        // New item — append a new row
+        await sheetWrite(
+          appendUrl('Pantry Stock', 'A:G'),
+          { range: 'Pantry Stock!A:G', majorDimension: 'ROWS', values: [[item.name, 'Yes', 'No', addedQty, item.unit, '', today]] }
+        );
+        // Add to local copy so duplicates in same batch don't create two rows
+        rows.push([item.name, 'Yes', 'No', String(addedQty), item.unit, '', today]);
       }
     }
     return true;
-  } catch (err) { return false; }
+  } catch (err) { console.error('restockPantryFromShopping failed:', err); return false; }
 }
 
 export async function consumeIngredientsFromPantry(_spreadsheetId: string, items: ShoppingListItem[], _accessToken: string | null): Promise<boolean> {
