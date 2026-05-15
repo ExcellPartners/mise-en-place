@@ -122,6 +122,15 @@ const QUIZ_STEPS: QuizStep[] = [
       { label: '❄️ Winter', value: 'winter' },
     ],
   },
+  {
+    id: 'inseason',
+    question: 'Want to use what's in season right now?',
+    emoji: '🥬',
+    options: [
+      { label: 'Yes — peak season only', value: 'yes' },
+      { label: 'Not a priority',         value: 'no'  },
+    ],
+  },
 ];
 
 type QuizAnswers = Record<string, string | null>; // null = Don't Care
@@ -181,6 +190,21 @@ const scoreRecipeForQuiz = (r: Recipe, answers: QuizAnswers): boolean => {
           winter: ['winter', 'soup', 'stew', 'braise', 'roast', 'comfort', 'holiday', 'chili'],
         };
         passes = (seasonExp[answer] || [answer]).some(kw => text.includes(kw));
+        break;
+      }
+      case 'inseason': {
+        if (answer === 'no') { passes = true; break; }
+        // Map current month to seasonal keywords for Upstate NY
+        const m = new Date().getMonth();
+        const inSeasonKeywords: string[] = m >= 2 && m <= 4
+          ? ['asparagus', 'pea', 'ramp', 'radish', 'spinach', 'lettuce', 'artichoke', 'rhubarb', 'morel']
+          : m >= 5 && m <= 7
+          ? ['corn', 'tomato', 'zucchini', 'cucumber', 'pepper', 'eggplant', 'blueberry', 'peach', 'basil', 'bean']
+          : m >= 8 && m <= 10
+          ? ['apple', 'pumpkin', 'squash', 'sweet potato', 'kale', 'cauliflower', 'broccoli', 'pear', 'grape', 'beet']
+          : ['potato', 'carrot', 'parsnip', 'turnip', 'cabbage', 'leek', 'onion', 'celery root', 'winter squash'];
+        const ingText = (r.ingredients || []).map((i: RecipeIngredient) => i.name).join(' ').toLowerCase();
+        passes = inSeasonKeywords.some(kw => text.includes(kw) || ingText.includes(kw));
         break;
       }
     }
@@ -526,6 +550,15 @@ Rules:
     }
   };
 
+  const [produceCategories, setProduceCategories] = useState<Set<Category>>(new Set());
+  const toggleProduceCategory = (cat: Category) => {
+    setProduceCategories(prev => {
+      const next = new Set(prev);
+      next.has(cat) ? next.delete(cat) : next.add(cat);
+      return next;
+    });
+  };
+
   const produceRecipes = useMemo(() => {
     if (!selectedProduce) return [];
     const kws = selectedProduce.keywords.map(k => k.toLowerCase());
@@ -731,7 +764,7 @@ Rules:
             <span className="material-symbols-outlined text-2xl font-bold">arrow_back</span>
           </button>
           <div className="flex-1 text-center">
-            <h1 className="text-lg font-black tracking-tight uppercase">The Produce Professor</h1>
+            <h1 className="text-lg font-black tracking-tight uppercase">{selectedProduce ? selectedProduce.name : 'The Produce Professor'}</h1>
             <p className="text-[#636b2f] text-[9px] font-black uppercase tracking-[0.2em] mt-0.5">{currentSeason} · {currentMonth}</p>
           </div>
           <button onClick={fetchProduceProfessor} className="size-10 flex items-center justify-center text-[#636b2f] active:scale-90 transition-transform">
@@ -849,9 +882,20 @@ Rules:
               {/* Matching recipes */}
               <div>
                 <h3 className="text-white font-black text-lg mb-1">In Your Library</h3>
-                <p className="text-[#636b2f] text-[9px] font-black uppercase tracking-widest mb-4">
+                <p className="text-[#636b2f] text-[9px] font-black uppercase tracking-widest mb-3">
                   {produceRecipes.length} recipe{produceRecipes.length !== 1 ? 's' : ''} featuring {selectedProduce.name.toLowerCase()}
+                  {produceCategories.size > 0 ? ' · filtered' : ''}
                 </p>
+                <div className="flex gap-2 overflow-x-auto no-scrollbar mb-4 -mx-4 px-4">
+                  {CATEGORIES.map(cat => (
+                    <button key={cat} onClick={() => toggleProduceCategory(cat)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full shrink-0 text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 ${
+                        produceCategories.has(cat) ? 'bg-[#636b2f] text-white border border-[#636b2f]' : 'bg-white/5 text-white/40 border border-white/10'
+                      }`}>
+                      <span className="text-sm leading-none">{CATEGORY_EMOJI[cat]}</span>{cat}
+                    </button>
+                  ))}
+                </div>
                 {produceRecipes.length === 0 ? (
                   <div className="flex flex-col items-center py-12 text-center opacity-40">
                     <span className="text-4xl mb-3">{selectedProduce.emoji}</span>
@@ -897,7 +941,7 @@ Rules:
   return (
     <div className="bg-[#000000] min-h-screen text-white flex flex-col w-full">
       <header className="sticky top-0 z-20 bg-[#000000]/90 backdrop-blur-md px-4 py-3 flex items-center justify-between border-b border-white/5 header-safe-pt">
-        <button onClick={onBack} className="size-10 flex items-center justify-center active:scale-90">
+        <button onClick={() => { if (showProfessor) { setShowProfessor(false); setSelectedProduce(null); } else { onBack(); } }} className="size-10 flex items-center justify-center active:scale-90">
           <span className="material-symbols-outlined text-2xl font-bold">arrow_back</span>
         </button>
         <div className="flex-1 text-center">
@@ -973,7 +1017,7 @@ Rules:
             {/* ── Produce Professor card ── */}
             <section className="px-4 mb-8">
               <button
-                onClick={() => { setShowProfessor(true); if (professorPhase === 'idle') fetchProduceProfessor(); }}
+                onClick={() => { setShowProfessor(true); if (professorPhase === 'idle') fetchProduceProfessor(); setTimeout(() => mainRef.current?.scrollTo({ top: 0, behavior: 'smooth' }), 50); }}
                 className="w-full rounded-3xl overflow-hidden relative active:scale-[0.98] transition-transform group"
                 style={{ background: 'linear-gradient(135deg, #1a2e1a 0%, #0f1f0f 100%)' }}
               >
