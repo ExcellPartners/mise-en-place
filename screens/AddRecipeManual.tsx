@@ -347,8 +347,7 @@ const AddRecipeManual: React.FC<AddRecipeManualProps> = ({
         recipe.id, recipe.title, recipe.category, recipe.baseServings,
         recipe.prepTime, recipe.cookTime, recipe.difficulty, 0,
         recipe.description, recipe.chefTip,
-        recipe.instructions.join('
-'),
+        recipe.instructions.join('\n'),
         recipe.imageUrl || '', '', 'FALSE',
         new Date().toISOString(), '',
         recipe.sourceName || '', recipe.sourceAuthor || '', recipe.sourceUrl || ''
@@ -364,9 +363,11 @@ const AddRecipeManual: React.FC<AddRecipeManualProps> = ({
             body: JSON.stringify({ range: 'Recipes!A:S', majorDimension: 'ROWS', values: [recipeRow] })
           }
         );
+        // Log regardless of success so we can see what's happening
+        const recipeBody = await recipeRes.text().catch(() => 'unreadable');
+        console.log('Sheet write status:', recipeRes.status, 'body:', recipeBody.slice(0, 500));
         if (!recipeRes.ok) {
-          const err = await recipeRes.json().catch(() => ({}));
-          throw new Error(`Recipes tab: ${err.error?.message || recipeRes.status}`);
+          throw new Error('Sheet write failed ' + recipeRes.status + ': ' + recipeBody.slice(0, 400));
         }
 
         // Write to Components tab
@@ -382,7 +383,7 @@ const AddRecipeManual: React.FC<AddRecipeManualProps> = ({
           );
         }
       } else {
-        throw new Error('Not authenticated — no access token. Try signing out and back in.');
+        throw new Error('No access token available. Token value: ' + String(accessToken).slice(0, 20) + '. Try signing out and signing back in.');
       }
 
       // 2. Add to local state via parent
