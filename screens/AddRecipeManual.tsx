@@ -3,7 +3,7 @@ import { Recipe, RecipeIngredient } from '../types';
 
 interface AddRecipeManualProps {
   onBack: () => void;
-  onSave: (recipe: Recipe) => void;
+  onSave: (recipe: Recipe) => Promise<void> | void;
   initialData?: Recipe;
   existingIds?: string[];         // for duplicate-safe ID generation
   spreadsheetId?: string | null;  // for collections auto-tagging
@@ -333,10 +333,10 @@ const AddRecipeManual: React.FC<AddRecipeManualProps> = ({
     setCommitPhase('saving');
 
     try {
-      // 1. Save recipe (parent handles Sheet write)
-      onSave(recipe);
+      // 1. Await Sheet write + local state update (parent does NOT navigate)
+      await onSave(recipe);
 
-      // 2. AI Collections auto-tagging (background, non-blocking)
+      // 2. AI Collections auto-tagging
       if (spreadsheetId && accessToken) {
         setCommitPhase('tagging');
         try {
@@ -350,9 +350,11 @@ const AddRecipeManual: React.FC<AddRecipeManualProps> = ({
       }
 
       setCommitPhase('done');
+      // Show success state briefly then navigate home
       setTimeout(() => {
         setIsCommitting(false);
         setCommitPhase(null);
+        onBack(); // ← AddRecipeManual owns navigation
       }, 1200);
     } catch (err) {
       setIsCommitting(false);

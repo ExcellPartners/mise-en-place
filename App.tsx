@@ -359,18 +359,19 @@ const App: React.FC = () => {
     }
   };
 
-  const handleSaveRecipe = async (recipe: Recipe) => {
-    // Instant local add — searchable immediately without refresh
+  // onSave ONLY writes data — does NOT navigate.
+  // AddRecipeManual owns navigation (calls onBack after its overlay completes).
+  const handleSaveRecipe = async (recipe: Recipe): Promise<void> => {
+    // 1. Add to local state immediately — searchable right away
     setRecipesList(prev => prev.find(r => r.id === recipe.id) ? prev : [...prev, recipe]);
-    // Sheet write (AddRecipeManual commit overlay shows loading state)
+    // 2. Write to Sheet
     if (spreadsheetId) {
       try {
         await saveRecipeToSheet(spreadsheetId, recipe, accessToken, masterIngredients);
         triggerSync();
       } catch (err) { console.error('Sheet write failed:', err); }
     }
-    resetToView('recipes');
-    showToast(recipe.title + ' added to your catalog!');
+    // No navigation here — AddRecipeManual calls onBack after its own overlay
   };
 
   // Called from Collections "Add to Catalog" — adds to local list + Sheet
