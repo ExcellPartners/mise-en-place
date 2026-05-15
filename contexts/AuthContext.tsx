@@ -7,9 +7,10 @@ interface AuthContextType {
   spreadsheetId: string | null;
   isProfileComplete: boolean;
   isAuthenticated: boolean;
-  login: (name: string) => void;
+  login: (name: string, token?: string, email?: string) => void;
   completeProfile: (name: string, sheetId: string) => void;
   updateName: (name: string) => void;
+  setAccessToken: (token: string | null) => void;
   logout: () => void;
 }
 
@@ -18,9 +19,8 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const TARGET_SHEET_ID = '16ADJZBC80b4hF_TBqZP_4pCmBYVeMwtFNWLx59-Wyds';
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  // Read real Google access token first, fall back to mock token only if present
-  const [accessToken, setAccessToken] = useState<string | null>(() => {
-    return localStorage.getItem('mise_access_token') || localStorage.getItem('mise_mock_token');
+  const [accessToken, setAccessTokenState] = useState<string | null>(() => {
+    return localStorage.getItem('mise_access_token');
   });
   const [userEmail, setUserEmail] = useState<string | null>(() => localStorage.getItem('mise_user_email'));
   const [userName, setUserName] = useState<string | null>(() => localStorage.getItem('mise_user_name'));
@@ -31,18 +31,31 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     localStorage.getItem('mise_profile_complete') === 'true'
   );
 
-  // Called after Google OAuth — name and token already stored by Login.tsx
-  const login = (name: string) => {
-    const token = localStorage.getItem('mise_access_token') || localStorage.getItem('mise_mock_token');
-    const email = localStorage.getItem('mise_user_email') || '';
-    setAccessToken(token);
-    setUserEmail(email);
+  const setAccessToken = (token: string | null) => {
+    setAccessTokenState(token);
+    if (token) {
+      localStorage.setItem('mise_access_token', token);
+    } else {
+      localStorage.removeItem('mise_access_token');
+    }
+  };
+
+  // Accept token and email directly so there's no localStorage timing issue
+  const login = (name: string, token?: string, email?: string) => {
+    const resolvedToken = token || localStorage.getItem('mise_access_token');
+    const resolvedEmail = email || localStorage.getItem('mise_user_email') || '';
+
+    setAccessTokenState(resolvedToken);
+    setUserEmail(resolvedEmail);
     setUserName(name);
     setSpreadsheetId(TARGET_SHEET_ID);
+    setIsProfileComplete(true);
+
+    if (resolvedToken) localStorage.setItem('mise_access_token', resolvedToken);
+    localStorage.setItem('mise_user_email', resolvedEmail);
     localStorage.setItem('mise_user_name', name);
     localStorage.setItem('mise_sheet_id', TARGET_SHEET_ID);
     localStorage.setItem('mise_profile_complete', 'true');
-    setIsProfileComplete(true);
   };
 
   const completeProfile = (name: string, sheetId: string) => {
@@ -60,18 +73,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const logout = () => {
-    setAccessToken(null);
+    setAccessTokenState(null);
     setUserEmail(null);
     setUserName(null);
     setSpreadsheetId(null);
     setIsProfileComplete(false);
-    // Clear auth tokens but keep user preferences
     localStorage.removeItem('mise_access_token');
     localStorage.removeItem('mise_mock_token');
     localStorage.removeItem('mise_user_email');
     localStorage.removeItem('mise_profile_complete');
   };
 
+  // isAuthenticated requires a real Google token (starts with ya29.)
+  // A mock token or expired token won't work for Sheet writes
   const isAuthenticated = !!accessToken;
 
   return (
@@ -85,6 +99,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       login,
       completeProfile,
       updateName,
+      setAccessToken,
       logout,
     }}>
       {children}

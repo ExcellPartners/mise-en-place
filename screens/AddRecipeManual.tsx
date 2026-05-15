@@ -367,7 +367,13 @@ const AddRecipeManual: React.FC<AddRecipeManualProps> = ({
         const recipeBody = await recipeRes.text().catch(() => 'unreadable');
         console.log('Sheet write status:', recipeRes.status, 'body:', recipeBody.slice(0, 500));
         if (!recipeRes.ok) {
-          throw new Error('Sheet write failed ' + recipeRes.status + ': ' + recipeBody.slice(0, 400));
+          if (recipeRes.status === 401) {
+            throw new Error('Your Google session expired. Sign out from the Profile tab and sign back in with Google, then try again.');
+          }
+          if (recipeRes.status === 403) {
+            throw new Error('Permission denied (403). Make sure your Google account has edit access to the Sheet.');
+          }
+          throw new Error('Sheet write failed ' + recipeRes.status + ': ' + recipeBody.slice(0, 200));
         }
 
         // Write to Components tab
