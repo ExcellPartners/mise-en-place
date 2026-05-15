@@ -343,14 +343,18 @@ const AddRecipeManual: React.FC<AddRecipeManualProps> = ({
       // Build recipe row — A=ID, B=Title, C=Category, D=Serves, E=Prep, F=Cook,
       // G=Difficulty, H=Score, I=Description, J=ChefTip, K=Instructions,
       // L=Image, M=unused, N=Favorites, O=Date, P=unused, Q=SourceName, R=SourceAuthor, S=SourceURL
+      const truncate = (s: string, max = 45000) => (s || '').slice(0, max);
       const recipeRow = [
         recipe.id, recipe.title, recipe.category, recipe.baseServings,
         recipe.prepTime, recipe.cookTime, recipe.difficulty, 0,
-        recipe.description, recipe.chefTip,
-        recipe.instructions.join('\n'),
-        recipe.imageUrl || '', '', 'FALSE',
+        truncate(recipe.description, 2000),
+        truncate(recipe.chefTip, 1000),
+        truncate(recipe.instructions.join('\n'), 40000),
+        truncate(recipe.imageUrl || '', 500), '', 'FALSE',
         new Date().toISOString(), '',
-        recipe.sourceName || '', recipe.sourceAuthor || '', recipe.sourceUrl || ''
+        truncate(recipe.sourceName || '', 200),
+        truncate(recipe.sourceAuthor || '', 200),
+        truncate(recipe.sourceUrl || '', 500)
       ];
 
       // Write to Recipes tab via service account proxy (no OAuth needed)

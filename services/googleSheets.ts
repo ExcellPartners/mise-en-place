@@ -176,12 +176,14 @@ export async function saveRecipeToSheet(
   existingMasters: MasterIngredient[] = []
 ): Promise<boolean> {
   try {
+    const tr = (s: string | undefined, max = 45000) => (s || '').slice(0, max);
     const recipeRow = [
       recipe.id, recipe.title, recipe.category, recipe.baseServings,
       recipe.prepTime, recipe.cookTime, recipe.difficulty, 0,
-      recipe.description, recipe.chefTip, recipe.instructions.join('\n'),
-      recipe.imageUrl || '', '', 'FALSE', new Date().toISOString(), '',
-      recipe.sourceName || '', recipe.sourceAuthor || '', recipe.sourceUrl || '',
+      tr(recipe.description, 2000), tr(recipe.chefTip, 1000),
+      tr(recipe.instructions.join('\n'), 40000),
+      tr(recipe.imageUrl, 500), '', 'FALSE', new Date().toISOString(), '',
+      tr(recipe.sourceName, 200), tr(recipe.sourceAuthor, 200), tr(recipe.sourceUrl, 500),
     ];
 
     await sheetWrite(appendUrl('Recipes', 'A:S'), { range: 'Recipes!A:S', majorDimension: 'ROWS', values: [recipeRow] });
