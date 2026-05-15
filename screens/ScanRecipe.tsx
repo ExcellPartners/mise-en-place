@@ -68,15 +68,6 @@ const ScanRecipe: React.FC<ScanRecipeProps> = ({ onClose, onRecipeFound }) => {
     setErrorText(null);
     setStatusText('Reading recipe with Claude...');
 
-    // Check API key up front so we get a clear message
-    const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
-    if (!apiKey) {
-      setErrorText('API key missing. Add VITE_ANTHROPIC_API_KEY to your .env file and redeploy.');
-      setIsScanning(false);
-      setStatusText('Align page in vertical frame');
-      return;
-    }
-
     try {
       const prompt = `You are a recipe extraction assistant. Analyze this image of a recipe page and extract all recipe information.
 
@@ -107,14 +98,9 @@ Rules:
 - Convert all ingredient names to Title Case
 - Split instructions into individual numbered steps`;
 
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
+      const response = await fetch('/api/claude', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-allow-browser': 'true',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: 'claude-sonnet-4-20250514',
           max_tokens: 2000,
@@ -177,13 +163,13 @@ Rules:
     } catch (err: any) {
       console.error('Scan failed:', err);
       if (err.message === 'AUTH_ERROR') {
-        setErrorText('API key rejected (401). Check that VITE_ANTHROPIC_API_KEY is set correctly in Vercel and redeploy.');
+        setErrorText('API key rejected. Check that VITE_ANTHROPIC_API_KEY is set in Vercel environment variables.');
       } else if (err.message === 'BUSY_ERROR') {
         setErrorText('Claude is busy right now. Wait a moment and try again.');
-      } else if (err.message?.includes('fetch')) {
-        setErrorText('Network error. Check your connection and try again.');
+      } else if (err.message?.includes('fetch') || err.message?.includes('network') || err.message?.includes('Failed')) {
+        setErrorText('Could not reach the server. Check your connection and try again.');
       } else {
-        setErrorText(`Scan failed: ${err.message || 'Unknown error'}. Make sure the text is clear and well-lit.`);
+        setErrorText(`Scan failed: ${err.message || 'Unknown error'}`);
       }
       setIsScanning(false);
       setStatusText('Align page in vertical frame');

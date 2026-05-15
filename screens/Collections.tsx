@@ -252,14 +252,9 @@ Rules:
 - Include at least 4 ingredients and 3 instruction steps per recipe
 - Use real URLs from cooking sites like seriouseats.com, nytcooking.com, bonappetit.com, allrecipes.com, food52.com`;
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
+  const response = await fetch('/api/claude', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': import.meta.env.VITE_ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-allow-browser': 'true',
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 4000,
