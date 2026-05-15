@@ -235,7 +235,7 @@ const ShoppingList: React.FC<ShoppingListProps> = ({
         </div>
       </div>
 
-      <div className="flex-1 pt-4 pb-[200px]">
+      <div className="flex-1 pt-4 pb-[280px]">
         {/* Quick add */}
         <div className="px-4 mb-4">
           <div className="bg-white/5 rounded-2xl flex items-center px-4 border border-white/10 focus-within:border-[#636b2f]/60 transition-colors">
@@ -361,7 +361,7 @@ const ShoppingList: React.FC<ShoppingListProps> = ({
       </div>
 
       {/* Checkout CTA — always visible */}
-      <div className="fixed bottom-0 left-0 right-0 w-full z-[90]">
+      <div className="fixed bottom-0 left-0 right-0 w-full z-[110]">
         <div className="px-4 pb-6 pt-4 bg-[#000000]/95 backdrop-blur-xl flex flex-col gap-3 shadow-[0_-20px_50px_rgba(0,0,0,0.5)] border-t border-white/5">
           {totalCount > 0 && (
             <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
