@@ -64,6 +64,19 @@ interface QuizStep {
 
 const QUIZ_STEPS: QuizStep[] = [
   {
+    id: 'course',
+    question: 'What course are you making?',
+    emoji: '🍽️',
+    options: [
+      { label: '🍽️ Main',      value: 'Main'      },
+      { label: '🥗 Side',       value: 'Side'      },
+      { label: '🧆 Appetizer',  value: 'Appetizer' },
+      { label: '🍳 Breakfast',  value: 'Breakfast' },
+      { label: '🍮 Dessert',    value: 'Dessert'   },
+      { label: '🥤 Beverage',   value: 'Beverage'  },
+    ],
+  },
+  {
     id: 'time',
     question: 'How much time do you have?',
     emoji: '⏱️',
@@ -76,136 +89,148 @@ const QUIZ_STEPS: QuizStep[] = [
   },
   {
     id: 'protein',
-    question: 'Any protein preference?',
+    question: "What's your main ingredient?",
     emoji: '🥩',
     options: [
-      { label: 'Chicken',    value: 'chicken'    },
-      { label: 'Beef',       value: 'beef'       },
-      { label: 'Pork',       value: 'pork'       },
-      { label: 'Seafood',    value: 'seafood'    },
-      { label: 'Vegetarian', value: 'vegetarian' },
+      { label: '🥩 Beef',        value: 'beef'     },
+      { label: '🍗 Chicken',     value: 'chicken'  },
+      { label: '🐷 Pork',        value: 'pork'     },
+      { label: '🐟 Seafood',     value: 'seafood'  },
+      { label: '🦃 Turkey',      value: 'turkey'   },
+      { label: '🥚 Eggs',        value: 'eggs'     },
+      { label: '🍝 Pasta/Grain', value: 'pasta'    },
+      { label: '🥬 Vegetarian',  value: 'veggie'   },
     ],
   },
   {
     id: 'cuisine',
-    question: 'What cuisine are you feeling?',
+    question: 'Any cuisine cravings?',
     emoji: '🌍',
     options: [
-      { label: 'American',      value: 'american'      },
-      { label: 'Italian',       value: 'italian'       },
-      { label: 'Mexican',       value: 'mexican'       },
-      { label: 'Asian',         value: 'asian'         },
-      { label: 'Mediterranean', value: 'mediterranean' },
-      { label: 'French',        value: 'french'        },
-      { label: 'Indian',        value: 'indian'        },
+      { label: '🍔 American',      value: 'american'      },
+      { label: '🍕 Italian',       value: 'italian'       },
+      { label: '🌮 Mexican',       value: 'mexican'       },
+      { label: '🍜 Asian',         value: 'asian'         },
+      { label: '🫒 Mediterranean', value: 'mediterranean' },
+      { label: '🥐 French',        value: 'french'        },
+      { label: '🍛 Indian',        value: 'indian'        },
     ],
   },
   {
     id: 'vibe',
-    question: 'What\'s the vibe?',
+    question: "What's the vibe?",
     emoji: '✨',
     options: [
-      { label: 'Comfort food',    value: 'comfort'   },
-      { label: 'Light & fresh',   value: 'light'     },
-      { label: 'Fancy / impress', value: 'fancy'     },
-      { label: 'One pot',         value: 'onepot'    },
-      { label: 'Quick weeknight', value: 'weeknight' },
-    ],
-  },
-  {
-    id: 'season',
-    question: 'Any seasonal preference?',
-    emoji: '🌿',
-    options: [
-      { label: '🌸 Spring', value: 'spring' },
-      { label: '☀️ Summer', value: 'summer' },
-      { label: '🍂 Fall',   value: 'fall'   },
-      { label: '❄️ Winter', value: 'winter' },
+      { label: '🛋️ Comfort food',  value: 'comfort'   },
+      { label: '🥗 Light & fresh', value: 'light'     },
+      { label: '🍷 Fancy night in',value: 'fancy'     },
+      { label: '🥘 One pot',       value: 'onepot'    },
+      { label: '⚡ Quick weeknight',value: 'weeknight' },
     ],
   },
   {
     id: 'inseason',
-    question: "Want to use what's in season right now?",
+    question: "Use what's in season right now?",
     emoji: '🥬',
     options: [
-      { label: 'Yes — peak season only', value: 'yes' },
-      { label: 'Not a priority',         value: 'no'  },
+      { label: 'Yes — peak season', value: 'yes' },
+      { label: 'Not a priority',    value: 'no'  },
     ],
   },
 ];
 
 type QuizAnswers = Record<string, string | null>; // null = Don't Care
 
-// Score a recipe against quiz answers (AND logic — must pass every answered step)
+// Score a recipe against quiz answers
+// course = hard filter (exact category match)
+// everything else = soft keyword match (generous expansions)
 const scoreRecipeForQuiz = (r: Recipe, answers: QuizAnswers): boolean => {
   const text = recipeText(r);
   const t = recipeTime(r);
-  const servings = n(r.baseServings);
+  const ingText = (r.ingredients || []).map((i: RecipeIngredient) => i.name).join(' ').toLowerCase();
+  const fullText = text + ' ' + ingText;
 
   for (const [stepId, answer] of Object.entries(answers)) {
-    if (answer === null) continue; // Don't Care — skip
+    if (answer === null) continue; // Don't Care — always passes
 
     let passes = false;
     switch (stepId) {
+
+      case 'course':
+        // Hard filter — must match category exactly
+        passes = r.category?.toLowerCase() === answer.toLowerCase();
+        break;
+
       case 'time':
+        if (t === 0) { passes = true; break; } // no time data — don't exclude
         passes =
-          (answer === 'under20' && t > 0 && t < 20) ||
-          (answer === '20to40'  && t >= 20 && t <= 40) ||
-          (answer === '40to60'  && t > 40  && t <= 60) ||
-          (answer === 'over60'  && t > 60);
+          (answer === 'under20' && t <= 20) ||
+          (answer === '20to40'  && t >= 15 && t <= 45) ||
+          (answer === '40to60'  && t >= 30 && t <= 70) ||
+          (answer === 'over60'  && t >= 50);
         break;
+
       case 'protein': {
-        const proteinText = [
-          r.title, r.description, r.category,
-          ...(r.ingredients || []).map((i: RecipeIngredient) => i.name)
-        ].join(' ').toLowerCase();
-        passes = proteinText.includes(answer);
-        break;
-      }
-      case 'cuisine': {
-        const expansions: Record<string, string[]> = {
-          asian:         ['asian', 'chinese', 'japanese', 'korean', 'thai', 'vietnamese', 'soy', 'stir', 'ramen', 'teriyaki', 'miso'],
-          italian:       ['italian', 'pasta', 'pizza', 'risotto', 'lasagna', 'parmesan', 'marinara', 'pesto'],
-          mexican:       ['mexican', 'taco', 'salsa', 'fajita', 'enchilada', 'guacamole', 'burrito'],
-          mediterranean: ['mediterranean', 'greek', 'hummus', 'falafel', 'olive', 'tzatziki'],
-          french:        ['french', 'bistro', 'coq au vin', 'ratatouille', 'beurre', 'gratin'],
-          indian:        ['indian', 'curry', 'masala', 'tikka', 'naan', 'tandoori', 'dal'],
-          american:      ['american', 'burger', 'bbq', 'diner', 'mac and cheese', 'fried chicken'],
+        const proteinMap: Record<string, string[]> = {
+          beef:    ['beef', 'steak', 'chuck', 'brisket', 'ground beef', 'ribeye', 'sirloin', 'short rib', 'burger', 'meatball', 'bolognese'],
+          chicken: ['chicken', 'poultry', 'hen', 'wing', 'thigh', 'breast', 'drumstick', 'rotisserie'],
+          pork:    ['pork', 'bacon', 'ham', 'sausage', 'prosciutto', 'pancetta', 'chorizo', 'ribs', 'pulled pork', 'loin'],
+          seafood: ['fish', 'shrimp', 'salmon', 'tuna', 'cod', 'halibut', 'scallop', 'crab', 'lobster', 'clam', 'mussel', 'anchovy', 'tilapia', 'sea bass', 'mahi'],
+          turkey:  ['turkey', 'ground turkey'],
+          eggs:    ['egg', 'eggs', 'frittata', 'omelette', 'quiche', 'stratum'],
+          pasta:   ['pasta', 'spaghetti', 'penne', 'fettuccine', 'rigatoni', 'linguine', 'rice', 'grain', 'quinoa', 'farro', 'noodle', 'ramen', 'orzo'],
+          veggie:  ['vegetable', 'vegetarian', 'vegan', 'tofu', 'lentil', 'bean', 'chickpea', 'mushroom', 'eggplant', 'zucchini', 'cauliflower', 'broccoli', 'squash'],
         };
-        passes = (expansions[answer] || [answer]).some(kw => text.includes(kw));
+        const kws = proteinMap[answer] || [answer];
+        passes = kws.some(kw => fullText.includes(kw));
         break;
       }
+
+      case 'cuisine': {
+        const cuisineMap: Record<string, string[]> = {
+          american:      ['american', 'burger', 'bbq', 'barbecue', 'mac and cheese', 'fried chicken', 'biscuit', 'gravy', 'chili', 'diner', 'pot roast', 'cornbread'],
+          italian:       ['italian', 'pasta', 'pizza', 'risotto', 'lasagna', 'parmesan', 'marinara', 'pesto', 'bruschetta', 'gnocchi', 'polenta', 'prosciutto', 'osso'],
+          mexican:       ['mexican', 'taco', 'salsa', 'fajita', 'enchilada', 'guacamole', 'burrito', 'quesadilla', 'tamale', 'mole', 'chipotle', 'jalapeño', 'tortilla'],
+          asian:         ['asian', 'chinese', 'japanese', 'korean', 'thai', 'vietnamese', 'soy', 'stir fry', 'ramen', 'teriyaki', 'miso', 'dumplings', 'fried rice', 'noodle', 'sesame', 'ginger', 'hoisin', 'sriracha', 'pho', 'banh mi', 'bibimbap'],
+          mediterranean: ['mediterranean', 'greek', 'hummus', 'falafel', 'olive', 'tzatziki', 'shawarma', 'pita', 'tahini', 'feta', 'za\'atar', 'pomegranate', 'harissa', 'couscous'],
+          french:        ['french', 'bistro', 'coq au vin', 'ratatouille', 'beurre', 'gratin', 'quiche', 'crepe', 'boeuf', 'cassoulet', 'bouillabaisse', 'vinaigrette'],
+          indian:        ['indian', 'curry', 'masala', 'tikka', 'naan', 'tandoori', 'dal', 'biryani', 'paneer', 'chutney', 'turmeric', 'garam masala', 'samosa'],
+        };
+        const kws = cuisineMap[answer] || [answer];
+        passes = kws.some(kw => fullText.includes(kw));
+        break;
+      }
+
       case 'vibe':
         passes =
-          (answer === 'comfort'   && (text.includes('comfort') || text.includes('hearty') || text.includes('creamy'))) ||
-          (answer === 'light'     && (text.includes('light') || text.includes('fresh') || text.includes('salad'))) ||
-          (answer === 'fancy'     && (text.includes('steak') || text.includes('risotto') || text.includes('roast') || text.includes('filet'))) ||
-          (answer === 'onepot'    && (text.includes('pot') || text.includes('pan') || text.includes('skillet') || text.includes('sheet'))) ||
-          (answer === 'weeknight' && t > 0 && t <= 35);
+          (answer === 'comfort'   && (fullText.includes('comfort') || fullText.includes('hearty') || fullText.includes('creamy') || fullText.includes('rich') || fullText.includes('cozy') || fullText.includes('warm'))) ||
+          (answer === 'light'     && (fullText.includes('light') || fullText.includes('fresh') || fullText.includes('salad') || fullText.includes('bright') || fullText.includes('crisp') || fullText.includes('citrus'))) ||
+          (answer === 'fancy'     && (fullText.includes('steak') || fullText.includes('risotto') || fullText.includes('roast') || fullText.includes('filet') || fullText.includes('elegant') || fullText.includes('dinner party') || fullText.includes('impressive') || fullText.includes('seared') || fullText.includes('reduction'))) ||
+          (answer === 'onepot'    && (fullText.includes('pot') || fullText.includes('pan') || fullText.includes('skillet') || fullText.includes('sheet') || fullText.includes('one pot') || fullText.includes('slow cooker') || fullText.includes('dutch oven') || fullText.includes('casserole'))) ||
+          (answer === 'weeknight' && (t === 0 || t <= 40));
         break;
-      case 'season': {
-        const seasonExp: Record<string, string[]> = {
-          spring: ['spring', 'asparagus', 'pea', 'radish', 'artichoke', 'fresh herb'],
-          summer: ['summer', 'grill', 'bbq', 'corn', 'tomato', 'zucchini', 'cold', 'salad'],
-          fall:   ['fall', 'autumn', 'pumpkin', 'squash', 'apple', 'cider', 'harvest'],
-          winter: ['winter', 'soup', 'stew', 'braise', 'roast', 'comfort', 'holiday', 'chili'],
-        };
-        passes = (seasonExp[answer] || [answer]).some(kw => text.includes(kw));
-        break;
-      }
+
       case 'inseason': {
         if (answer === 'no') { passes = true; break; }
-        // Map current month to seasonal keywords for Upstate NY
         const m = new Date().getMonth();
-        const inSeasonKeywords: string[] = m >= 2 && m <= 4
-          ? ['asparagus', 'pea', 'ramp', 'radish', 'spinach', 'lettuce', 'artichoke', 'rhubarb', 'morel']
-          : m >= 5 && m <= 7
-          ? ['corn', 'tomato', 'zucchini', 'cucumber', 'pepper', 'eggplant', 'blueberry', 'peach', 'basil', 'bean']
-          : m >= 8 && m <= 10
-          ? ['apple', 'pumpkin', 'squash', 'sweet potato', 'kale', 'cauliflower', 'broccoli', 'pear', 'grape', 'beet']
-          : ['potato', 'carrot', 'parsnip', 'turnip', 'cabbage', 'leek', 'onion', 'celery root', 'winter squash'];
-        const ingText = (r.ingredients || []).map((i: RecipeIngredient) => i.name).join(' ').toLowerCase();
-        passes = inSeasonKeywords.some(kw => text.includes(kw) || ingText.includes(kw));
+        const inSeasonKeywords: string[] =
+          m >= 2 && m <= 4  ? ['asparagus', 'pea', 'ramp', 'radish', 'spinach', 'lettuce', 'artichoke', 'rhubarb', 'morel', 'leek', 'fiddlehead'] :
+          m >= 5 && m <= 7  ? ['corn', 'tomato', 'zucchini', 'cucumber', 'pepper', 'eggplant', 'blueberry', 'peach', 'basil', 'bean', 'summer squash', 'cherry'] :
+          m >= 8 && m <= 10 ? ['apple', 'pumpkin', 'squash', 'sweet potato', 'kale', 'cauliflower', 'broccoli', 'pear', 'grape', 'beet', 'parsnip', 'brussels'] :
+                              ['potato', 'carrot', 'parsnip', 'turnip', 'cabbage', 'leek', 'onion', 'celery root', 'winter squash', 'citrus', 'pomegranate'];
+        passes = inSeasonKeywords.some(kw => fullText.includes(kw));
+        break;
+      }
+
+      // Legacy — kept so old saved answers don't break
+      case 'season': {
+        const seasonExp: Record<string, string[]> = {
+          spring: ['spring', 'asparagus', 'pea', 'radish', 'artichoke'],
+          summer: ['summer', 'grill', 'bbq', 'corn', 'tomato', 'zucchini'],
+          fall:   ['fall', 'autumn', 'pumpkin', 'squash', 'apple', 'cider'],
+          winter: ['winter', 'soup', 'stew', 'braise', 'roast', 'comfort'],
+        };
+        passes = (seasonExp[answer] || [answer]).some(kw => text.includes(kw));
         break;
       }
     }
@@ -217,15 +242,15 @@ const scoreRecipeForQuiz = (r: Recipe, answers: QuizAnswers): boolean => {
 // Build a human-readable search query from quiz answers for the AI web search
 const buildSearchQuery = (answers: QuizAnswers): string => {
   const parts: string[] = [];
+  if (answers.course && answers.course !== null) parts.push(answers.course.toLowerCase());
   const timeMap: Record<string, string> = { under20: 'under 20 minutes', '20to40': '20-40 minutes', '40to60': '40-60 minutes', over60: 'over an hour' };
   if (answers.time && answers.time !== null) parts.push(`ready in ${timeMap[answers.time] || answers.time}`);
   if (answers.protein && answers.protein !== null) parts.push(answers.protein);
   if (answers.cuisine && answers.cuisine !== null) parts.push(answers.cuisine);
   if (answers.vibe && answers.vibe !== null) {
-    const vibeMap: Record<string, string> = { comfort: 'comfort food', light: 'light and fresh', fancy: 'impressive dinner', onepot: 'one pot', weeknight: 'weeknight' };
+    const vibeMap: Record<string, string> = { comfort: 'comfort food', light: 'light and fresh', fancy: 'impressive dinner', onepot: 'one pot', weeknight: 'weeknight easy' };
     parts.push(vibeMap[answers.vibe] || answers.vibe);
   }
-  if (answers.season && answers.season !== null) parts.push(answers.season);
   return parts.join(' ') + ' recipe';
 };
 
