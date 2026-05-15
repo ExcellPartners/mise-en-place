@@ -21,6 +21,7 @@ const ScanRecipe: React.FC<ScanRecipeProps> = ({ onClose, onRecipeFound }) => {
   const [isShutterFlash, setIsShutterFlash] = useState(false);
   const [statusText, setStatusText] = useState('Align page in vertical frame');
   const [errorText, setErrorText] = useState<string | null>(null);
+  const [cameraReady, setCameraReady] = useState(false);
 
   useEffect(() => {
     let stream: MediaStream | null = null;
@@ -36,6 +37,7 @@ const ScanRecipe: React.FC<ScanRecipeProps> = ({ onClose, onRecipeFound }) => {
           stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
         } catch (err) {
           console.error('Camera access denied', err);
+          setErrorText('Camera access denied. Allow camera access in your browser settings and try again.');
           return;
         }
       }
@@ -46,12 +48,19 @@ const ScanRecipe: React.FC<ScanRecipeProps> = ({ onClose, onRecipeFound }) => {
         trackRef.current = track;
         const capabilities = track.getCapabilities() as any;
         if (capabilities.torch) setHasTorch(true);
-        try { await videoRef.current.play(); } catch (e) { console.error('Video play blocked:', e); }
+        try {
+          await videoRef.current.play();
+          setCameraReady(true);
+        } catch (e) {
+          console.error('Video play blocked:', e);
+        }
       }
     }
 
     startCamera();
-    return () => { if (stream) stream.getTracks().forEach(t => t.stop()); };
+    return () => {
+      if (stream) stream.getTracks().forEach(t => t.stop());
+    };
   }, []);
 
   const toggleFlash = async () => {
@@ -123,7 +132,7 @@ Rules:
         const errData = await response.json().catch(() => ({}));
         const status = response.status;
         if (status === 529 || status === 503) throw new Error('BUSY_ERROR');
-        throw new Error(errData.error || errData.anthropic_error?.error?.message || `API error ${status}`);
+        throw new Error(errData.error || `API error ${status}`);
       }
 
       const data = await response.json();
@@ -161,27 +170,35 @@ Rules:
 
     } catch (err: any) {
       console.error('Scan failed:', err);
-      if (err.message === 'AUTH_ERROR') {
-        setErrorText('API key rejected. Check that VITE_ANTHROPIC_API_KEY is set in Vercel environment variables.');
-      } else if (err.message === 'BUSY_ERROR') {
+      if (err.message === 'BUSY_ERROR') {
         setErrorText('Claude is busy right now. Wait a moment and try again.');
       } else if (err.message?.includes('fetch') || err.message?.includes('network') || err.message?.includes('Failed')) {
         setErrorText('Could not reach the server. Check your connection and try again.');
       } else {
         setErrorText(`Scan failed: ${err.message || 'Unknown error'}`);
       }
+    } finally {
       setIsScanning(false);
       setStatusText('Align page in vertical frame');
-    } finally {
-      if (!errorText) {
-        setIsScanning(false);
-        setStatusText('Align page in vertical frame');
-      }
     }
   };
 
   const handleCapture = async () => {
-    if (!videoRef.current || videoRef.current.readyState !== 4) return;
+    if (!videoRef.current) return;
+
+    // On mobile Chrome readyState can stay at 2 (HAVE_CURRENT_DATA) even when
+    // the camera is visibly streaming — so we just check > 0 instead of === 4
+    if (videoRef.current.readyState < 1) {
+      setErrorText('Camera not ready yet. Wait a moment and try again.');
+      return;
+    }
+
+    // If videoWidth is 0 the frame hasn't rendered yet
+    if (videoRef.current.videoWidth === 0) {
+      setErrorText('Camera is still loading. Try again in a second.');
+      return;
+    }
+
     setIsShutterFlash(true);
     setTimeout(() => setIsShutterFlash(false), 150);
 
@@ -207,7 +224,6 @@ Rules:
       const img = new Image();
       img.onload = async () => {
         const canvas = document.createElement('canvas');
-        // Cap size to avoid huge payloads
         const MAX = 1600;
         const scale = Math.min(1, MAX / Math.max(img.naturalWidth, img.naturalHeight));
         canvas.width = Math.round(img.naturalWidth * scale);
@@ -221,15 +237,15 @@ Rules:
       img.src = dataUrl;
     };
     reader.readAsDataURL(file);
-    e.target.value = ''; // reset so same file can be picked again
+    e.target.value = '';
   };
 
   return (
     <div className="bg-[#1c1d15] text-white h-screen flex flex-col w-full overflow-hidden relative">
 
-      {/* Gallery — NO capture attr, opens photo library */}
+      {/* Gallery — no capture attr, opens photo library */}
       <input type="file" ref={galleryInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
-      {/* Files — accepts images and PDFs */}
+      {/* Files */}
       <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*,application/pdf" className="hidden" />
 
       {/* Header */}
@@ -244,7 +260,7 @@ Rules:
         </button>
       </div>
 
-      {/* Error banner — visible on phone without dev tools */}
+      {/* Error banner */}
       {errorText && (
         <div className="mx-4 mb-2 p-4 rounded-2xl bg-red-500/20 border border-red-500/30 flex gap-3 items-start z-30">
           <span className="material-symbols-outlined text-red-400 text-xl shrink-0">error</span>
@@ -260,8 +276,14 @@ Rules:
 
       {/* Camera view */}
       <div className="relative flex-1 w-full bg-[#12130d] overflow-hidden flex items-center justify-center">
-        <video ref={videoRef} autoPlay muted playsInline
-          className="absolute inset-0 w-full h-full object-cover opacity-90" />
+        <video
+          ref={videoRef}
+          autoPlay
+          muted
+          playsInline
+          onCanPlay={() => setCameraReady(true)}
+          className="absolute inset-0 w-full h-full object-cover opacity-90"
+        />
 
         {isShutterFlash && <div className="absolute inset-0 bg-white z-50 animate-out fade-out duration-150" />}
 
@@ -278,7 +300,9 @@ Rules:
 
         <div className="absolute bottom-8 left-0 right-0 z-20 flex justify-center px-6">
           <div className="bg-black/60 backdrop-blur-md px-8 py-3 rounded-2xl border border-white/10 text-center">
-            <p className="text-white text-sm font-bold tracking-wide uppercase">{statusText}</p>
+            <p className="text-white text-sm font-bold tracking-wide uppercase">
+              {!cameraReady ? 'Starting camera...' : statusText}
+            </p>
           </div>
         </div>
       </div>
@@ -300,7 +324,7 @@ Rules:
         </div>
 
         <div className="flex items-center justify-around px-8">
-          {/* Gallery — opens photo library */}
+          {/* Gallery */}
           <button onClick={() => galleryInputRef.current?.click()}
             className="flex flex-col items-center gap-1 group cursor-pointer active:scale-95 transition-transform">
             <div className="w-14 h-14 rounded-xl bg-white/5 border-2 border-white/20 flex items-center justify-center">
@@ -311,9 +335,12 @@ Rules:
 
           {/* Shutter */}
           <div className="relative flex items-center justify-center">
-            <div className={`absolute size-24 border-2 border-white/20 rounded-full ${isScanning ? 'animate-spin border-t-[#626a2f]' : 'animate-pulse'}`} />
-            <button onClick={handleCapture} disabled={isScanning}
-              className={`size-20 bg-[#626a2f] rounded-full flex items-center justify-center shadow-xl active:scale-90 transition-all ${isScanning ? 'opacity-50' : ''}`}>
+            <div className={`absolute size-24 border-2 border-white/20 rounded-full ${isScanning ? 'animate-spin border-t-[#626a2f]' : cameraReady ? 'animate-pulse' : 'opacity-30'}`} />
+            <button
+              onClick={handleCapture}
+              disabled={isScanning || !cameraReady}
+              className={`size-20 bg-[#626a2f] rounded-full flex items-center justify-center shadow-xl active:scale-90 transition-all ${(isScanning || !cameraReady) ? 'opacity-50' : ''}`}
+            >
               <span className="material-symbols-outlined text-white text-4xl" style={{ fontVariationSettings: "'FILL' 1" }}>
                 {isScanning ? 'sync' : 'photo_camera'}
               </span>
@@ -346,7 +373,7 @@ Rules:
                   {[
                     'Align the cookbook page or recipe card vertically within the green frame.',
                     'Good lighting helps — use Flash if needed. Make sure all text is readable.',
-                    'Tap the shutter. Claude Vision reads the recipe and extracts everything automatically.',
+                    'Tap the shutter once the camera is ready. Claude Vision extracts everything automatically.',
                     'You can also tap Gallery to pick a photo from your camera roll, or Files for a PDF.',
                   ].map((tip, i) => (
                     <div key={i} className="flex gap-4">
