@@ -1,4 +1,4 @@
-const crypto = require('crypto');
+import crypto from 'crypto';
 
 function base64url(input) {
   const buf = typeof input === 'string' ? Buffer.from(input) : input;
@@ -58,12 +58,16 @@ function extractText(html) {
     .slice(0, 12000);
 }
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const body = req.body || {};
+  // Ensure body is parsed — Vercel should do this automatically but guard anyway
+  let body = req.body || {};
+  if (typeof body === 'string') {
+    try { body = JSON.parse(body); } catch(e) { body = {}; }
+  }
   const { action, url, sheetWrite: sheetWriteData, ...claudeBody } = body;
 
   // ── Google Sheets write via service account ──────────────────────────────────
@@ -148,7 +152,7 @@ module.exports = async function handler(req, res) {
     }
     return res.status(200).json(data);
   } catch (err) {
-    console.error('Proxy error:', err);
-    return res.status(500).json({ error: err.message || 'Proxy failed' });
+    console.error('Proxy error:', err.message, err.stack);
+    return res.status(500).json({ error: err.message || 'Proxy failed', stack: err.stack?.slice(0, 300) });
   }
 };
