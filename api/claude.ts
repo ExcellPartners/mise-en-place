@@ -1,14 +1,17 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Only allow POST
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const apiKey = process.env.VITE_ANTHROPIC_API_KEY;
+  // Try both — VITE_ prefix is for browser bundles, Node.js prefers without it
+  const apiKey = process.env.ANTHROPIC_API_KEY || process.env.VITE_ANTHROPIC_API_KEY;
+
   if (!apiKey) {
-    return res.status(500).json({ error: 'API key not configured on server' });
+    return res.status(500).json({ 
+      error: 'API key not configured. Set ANTHROPIC_API_KEY in Vercel environment variables.' 
+    });
   }
 
   try {
@@ -25,7 +28,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const data = await response.json();
 
     if (!response.ok) {
-      return res.status(response.status).json(data);
+      // Pass the real Anthropic error back so we can see it
+      return res.status(response.status).json({
+        error: data.error?.message || `Anthropic returned ${response.status}`,
+        anthropic_error: data,
+      });
     }
 
     return res.status(200).json(data);

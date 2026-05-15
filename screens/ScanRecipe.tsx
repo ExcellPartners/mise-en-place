@@ -120,11 +120,10 @@ Rules:
       });
 
       if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
+        const errData = await response.json().catch(() => ({}));
         const status = response.status;
-        if (status === 401) throw new Error('AUTH_ERROR');
         if (status === 529 || status === 503) throw new Error('BUSY_ERROR');
-        throw new Error(err.error?.message || `API error ${status}`);
+        throw new Error(errData.error || errData.anthropic_error?.error?.message || `API error ${status}`);
       }
 
       const data = await response.json();
