@@ -359,12 +359,14 @@ const App: React.FC = () => {
     }
   };
 
-  // onSave ONLY updates local state — AddRecipeManual handles the Sheet write directly
-  // and owns navigation (calls onBack after its overlay completes).
+  // onSave updates local state immediately, then triggers a background sync
+  // so the full recipe (with ingredients from Components tab) appears instantly.
+  // Sheet write is handled inside AddRecipeManual — NOT here (avoids double write).
   const handleSaveRecipe = async (recipe: Recipe): Promise<void> => {
+    // 1. Add immediately so it's searchable right away
     setRecipesList(prev => prev.find(r => r.id === recipe.id) ? prev : [...prev, recipe]);
-    // Sheet write is done inside AddRecipeManual — do NOT call saveRecipeToSheet here
-    // to avoid writing twice. triggerSync will pick it up on next load.
+    // 2. Background sync after a short delay to let the Sheet write complete first
+    setTimeout(() => triggerSync(), 2000);
   };
 
   // Called from Collections "Add to Catalog" — adds to local list + Sheet
@@ -529,14 +531,18 @@ const App: React.FC = () => {
       onStoreChange={setSelectedStore} onOpenMap={() => {}} onBack={handleBack}
       onCheckout={async (items) => {
         setIsAutoMapping(true);
-        const success = await restockPantryFromShopping(spreadsheetId || '', items, accessToken);
-        if (success) {
-          handleClearShoppingList();
-          alert('Restock Complete! Items added to Pantry.');
-          resetToView('pantry');
-          triggerSync();
-        } else {
-          alert('Checkout Failed. Check connection.');
+        try {
+          const success = await restockPantryFromShopping(spreadsheetId || '', items, accessToken);
+          if (success) {
+            handleClearShoppingList();
+            showToast('Checked out! Pantry updated.');
+            resetToView('pantry');
+            triggerSync();
+          } else {
+            showToast('Checkout failed — check your connection.');
+          }
+        } catch (err) {
+          showToast('Checkout error — try again.');
         }
         setIsAutoMapping(false);
       }}

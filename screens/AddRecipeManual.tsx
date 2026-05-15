@@ -101,15 +101,16 @@ If none fit, return: []`;
 
 async function appendToCollectionsSheet(
   spreadsheetId: string,
-  accessToken: string,
+  _accessToken: string,  // unused — service account proxy handles auth
   recipeId: string,
   collectionNames: string[]
 ): Promise<void> {
   const API_BASE = 'https://sheets.googleapis.com/v4/spreadsheets';
   const API_KEY = 'AIzaSyDFc2raCSZfnfyM5n1fwrsbUco1njqHHMk';
+  const ID = spreadsheetId || '16ADJZBC80b4hF_TBqZP_4pCmBYVeMwtFNWLx59-Wyds';
 
-  // Read current Collections tab
-  const res = await fetch(`${API_BASE}/${spreadsheetId}/values/Collections!A:B?key=${API_KEY}`);
+  // Read current Collections tab (read uses API key — no auth needed)
+  const res = await fetch(`${API_BASE}/${ID}/values/Collections!A:B?key=${API_KEY}`);
   if (!res.ok) return;
   const data = await res.json();
   const rows: string[][] = data.values || [];
@@ -118,15 +119,23 @@ async function appendToCollectionsSheet(
     const rowIdx = rows.findIndex(r => r[0]?.trim().toLowerCase() === colName.trim().toLowerCase());
     if (rowIdx === -1) continue;
 
-    const currentIds = (rows[rowIdx][1] || '').split(',').map(s => s.trim()).filter(Boolean);
+    const currentIds = (rows[rowIdx][1] || '').split(',').map((s: string) => s.trim()).filter(Boolean);
     if (currentIds.includes(recipeId)) continue;
     currentIds.push(recipeId);
 
     const range = `Collections!B${rowIdx + 1}`;
-    await fetch(`${API_BASE}/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED&key=${API_KEY}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
-      body: JSON.stringify({ range, majorDimension: 'ROWS', values: [[currentIds.join(', ')]] }),
+    // Write via service account proxy
+    await fetch('/api/claude', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'sheetWrite',
+        sheetWrite: {
+          method: 'PUT',
+          url: `${API_BASE}/${ID}/values/${range}?valueInputOption=USER_ENTERED&key=${API_KEY}`,
+          body: { range, majorDimension: 'ROWS', values: [[currentIds.join(', ')]] },
+        },
+      }),
     });
   }
 }
