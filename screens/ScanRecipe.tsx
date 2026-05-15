@@ -20,6 +20,7 @@ const ScanRecipe: React.FC<ScanRecipeProps> = ({ onClose, onRecipeFound }) => {
   const [showHelp, setShowHelp] = useState(false);
   const [isShutterFlash, setIsShutterFlash] = useState(false);
   const [statusText, setStatusText] = useState('Align page in vertical frame');
+  const [errorText, setErrorText] = useState<string | null>(null);
 
   useEffect(() => {
     let stream: MediaStream | null = null;
@@ -28,7 +29,7 @@ const ScanRecipe: React.FC<ScanRecipeProps> = ({ onClose, onRecipeFound }) => {
       try {
         stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
-          audio: false
+          audio: false,
         });
       } catch {
         try {
@@ -64,7 +65,17 @@ const ScanRecipe: React.FC<ScanRecipeProps> = ({ onClose, onRecipeFound }) => {
 
   const processImage = async (base64Data: string, previewUrl: string) => {
     setIsScanning(true);
-    setStatusText('Reading recipe...');
+    setErrorText(null);
+    setStatusText('Reading recipe with Claude...');
+
+    // Check API key up front so we get a clear message
+    const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
+    if (!apiKey) {
+      setErrorText('API key missing. Add VITE_ANTHROPIC_API_KEY to your .env file and redeploy.');
+      setIsScanning(false);
+      setStatusText('Align page in vertical frame');
+      return;
+    }
 
     try {
       const prompt = `You are a recipe extraction assistant. Analyze this image of a recipe page and extract all recipe information.
@@ -80,7 +91,7 @@ Return ONLY valid JSON with no other text, no markdown fences:
   "difficulty": "Medium",
   "chefTip": "Optional tip from the recipe",
   "ingredients": [
-    { "name": "ingredient name in Title Case", "amount": 1.5, "unit": "cup" }
+    { "name": "Ingredient Name", "amount": 1.5, "unit": "cup" }
   ],
   "instructions": [
     "Step 1 text",
@@ -92,15 +103,15 @@ Rules:
 - category must be one of: Main, Side, Appetizer, Dessert, Beverage, Breakfast
 - difficulty must be one of: Easy, Medium, Hard
 - unit must be one of: ${VALID_UNITS.join(', ')}
-- Estimate prep/cook times in minutes if not stated
+- Estimate prep/cook times in minutes if not visible
 - Convert all ingredient names to Title Case
-- Split instructions into individual steps`;
+- Split instructions into individual numbered steps`;
 
       const response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': import.meta.env.VITE_ANTHROPIC_API_KEY,
+          'x-api-key': apiKey,
           'anthropic-version': '2023-06-01',
           'anthropic-dangerous-allow-browser': 'true',
         },
@@ -113,11 +124,7 @@ Rules:
               content: [
                 {
                   type: 'image',
-                  source: {
-                    type: 'base64',
-                    media_type: 'image/jpeg',
-                    data: base64Data,
-                  },
+                  source: { type: 'base64', media_type: 'image/jpeg', data: base64Data },
                 },
                 { type: 'text', text: prompt },
               ],
@@ -128,7 +135,10 @@ Rules:
 
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
-        throw new Error(err.error?.message || `API error ${response.status}`);
+        const status = response.status;
+        if (status === 401) throw new Error('AUTH_ERROR');
+        if (status === 529 || status === 503) throw new Error('BUSY_ERROR');
+        throw new Error(err.error?.message || `API error ${status}`);
       }
 
       const data = await response.json();
@@ -136,11 +146,10 @@ Rules:
         ?.map(b => (b.type === 'text' ? b.text : ''))
         .join('') || '';
 
-      // Strip any accidental markdown fences
       const clean = rawText.replace(/```json|```/g, '').trim();
       const jsonStart = clean.indexOf('{');
       const jsonEnd = clean.lastIndexOf('}');
-      if (jsonStart === -1) throw new Error('No JSON in response');
+      if (jsonStart === -1) throw new Error('No recipe data found in response');
 
       const result = JSON.parse(clean.slice(jsonStart, jsonEnd + 1));
 
@@ -157,32 +166,37 @@ Rules:
         ingredients: (result.ingredients || []).map((ing: any) => ({
           name: ing.name,
           amount: Number(ing.amount) || 1,
-          unit: VALID_UNITS.includes((ing.unit || '').toLowerCase())
-            ? ing.unit.toLowerCase()
-            : 'unit',
+          unit: VALID_UNITS.includes((ing.unit || '').toLowerCase()) ? ing.unit.toLowerCase() : 'unit',
         })),
         instructions: Array.isArray(result.instructions) ? result.instructions : [],
         imageUrl: previewUrl,
       };
 
       onRecipeFound(extractedRecipe);
+
     } catch (err: any) {
       console.error('Scan failed:', err);
-      const msg = err.message?.includes('API error 401')
-        ? 'API key error — check your VITE_ANTHROPIC_API_KEY in .env'
-        : err.message?.includes('API error 529') || err.message?.includes('overloaded')
-          ? 'Claude is busy — wait a moment and try again.'
-          : 'Could not read the recipe. Make sure the text is clear and well-lit.';
-      alert(msg);
-    } finally {
+      if (err.message === 'AUTH_ERROR') {
+        setErrorText('API key rejected (401). Check that VITE_ANTHROPIC_API_KEY is set correctly in Vercel and redeploy.');
+      } else if (err.message === 'BUSY_ERROR') {
+        setErrorText('Claude is busy right now. Wait a moment and try again.');
+      } else if (err.message?.includes('fetch')) {
+        setErrorText('Network error. Check your connection and try again.');
+      } else {
+        setErrorText(`Scan failed: ${err.message || 'Unknown error'}. Make sure the text is clear and well-lit.`);
+      }
       setIsScanning(false);
       setStatusText('Align page in vertical frame');
+    } finally {
+      if (!errorText) {
+        setIsScanning(false);
+        setStatusText('Align page in vertical frame');
+      }
     }
   };
 
   const handleCapture = async () => {
     if (!videoRef.current || videoRef.current.readyState !== 4) return;
-
     setIsShutterFlash(true);
     setTimeout(() => setIsShutterFlash(false), 150);
 
@@ -191,43 +205,46 @@ Rules:
     canvas.height = videoRef.current.videoHeight;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-
     ctx.drawImage(videoRef.current, 0, 0);
+
     const fullResBase64 = canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
     const previewUrl = canvas.toDataURL('image/jpeg', 0.5);
-
     await processImage(fullResBase64, previewUrl);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
     const reader = new FileReader();
     reader.onload = async (event) => {
-      const result = event.target?.result as string;
-      // Ensure it's jpeg for Claude
+      const dataUrl = event.target?.result as string;
       const img = new Image();
       img.onload = async () => {
         const canvas = document.createElement('canvas');
-        canvas.width = img.naturalWidth;
-        canvas.height = img.naturalHeight;
+        // Cap size to avoid huge payloads
+        const MAX = 1600;
+        const scale = Math.min(1, MAX / Math.max(img.naturalWidth, img.naturalHeight));
+        canvas.width = Math.round(img.naturalWidth * scale);
+        canvas.height = Math.round(img.naturalHeight * scale);
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
-        ctx.drawImage(img, 0, 0);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         const base64Data = canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
-        await processImage(base64Data, result);
+        await processImage(base64Data, dataUrl);
       };
-      img.src = result;
+      img.src = dataUrl;
     };
     reader.readAsDataURL(file);
-    // Reset so same file can be selected again
-    e.target.value = '';
+    e.target.value = ''; // reset so same file can be picked again
   };
 
   return (
     <div className="bg-[#1c1d15] text-white h-screen flex flex-col w-full overflow-hidden relative">
-      {/* Hidden file inputs */}
-      <input type="file" ref={galleryInputRef} onChange={handleFileChange} accept="image/*" capture="environment" className="hidden" />
+
+      {/* Gallery — NO capture attr, opens photo library */}
+      <input type="file" ref={galleryInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
+      {/* Files — accepts images and PDFs */}
       <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*,application/pdf" className="hidden" />
 
       {/* Header */}
@@ -236,23 +253,30 @@ Rules:
           <span className="material-symbols-outlined text-3xl font-bold">close</span>
         </button>
         <h2 className="text-white text-lg font-bold leading-tight tracking-tight flex-1 text-center">Scan Recipe</h2>
-        <button
-          onClick={() => setShowHelp(true)}
-          className="flex size-12 items-center justify-center rounded-full bg-white/10 text-white active:scale-90"
-        >
+        <button onClick={() => setShowHelp(true)}
+          className="flex size-12 items-center justify-center rounded-full bg-white/10 text-white active:scale-90">
           <span className="material-symbols-outlined">help_outline</span>
         </button>
       </div>
 
+      {/* Error banner — visible on phone without dev tools */}
+      {errorText && (
+        <div className="mx-4 mb-2 p-4 rounded-2xl bg-red-500/20 border border-red-500/30 flex gap-3 items-start z-30">
+          <span className="material-symbols-outlined text-red-400 text-xl shrink-0">error</span>
+          <div className="flex-1">
+            <p className="text-red-300 text-xs font-bold leading-relaxed">{errorText}</p>
+            <button onClick={() => setErrorText(null)}
+              className="text-red-400/60 text-[10px] font-black uppercase tracking-widest mt-2">
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Camera view */}
       <div className="relative flex-1 w-full bg-[#12130d] overflow-hidden flex items-center justify-center">
-        <video
-          ref={videoRef}
-          autoPlay
-          muted
-          playsInline
-          className="absolute inset-0 w-full h-full object-cover opacity-90"
-        />
+        <video ref={videoRef} autoPlay muted playsInline
+          className="absolute inset-0 w-full h-full object-cover opacity-90" />
 
         {isShutterFlash && <div className="absolute inset-0 bg-white z-50 animate-out fade-out duration-150" />}
 
@@ -262,14 +286,14 @@ Rules:
           <div className="absolute -top-1 -right-1 w-16 h-16 border-t-4 border-r-4 border-[#626a2f] rounded-tr-xl" />
           <div className="absolute -bottom-1 -left-1 w-16 h-16 border-b-4 border-l-4 border-[#626a2f] rounded-bl-xl" />
           <div className="absolute -bottom-1 -right-1 w-16 h-16 border-b-4 border-r-4 border-[#626a2f] rounded-br-xl" />
-          <div className={`absolute left-0 w-full h-[3px] bg-[#626a2f] shadow-[0_0_20px_rgba(98,106,47,1)] ${isScanning ? 'animate-[scan_2.5s_linear_infinite]' : 'top-1/2 opacity-30 h-[1px]'}`} />
+          <div className={`absolute left-0 w-full h-[3px] bg-[#626a2f] shadow-[0_0_20px_rgba(98,106,47,1)] ${
+            isScanning ? 'animate-[scan_2.5s_linear_infinite]' : 'top-1/2 opacity-30 h-[1px]'
+          }`} />
         </div>
 
         <div className="absolute bottom-8 left-0 right-0 z-20 flex justify-center px-6">
           <div className="bg-black/60 backdrop-blur-md px-8 py-3 rounded-2xl border border-white/10 text-center">
-            <p className="text-white text-sm font-bold tracking-wide uppercase">
-              {isScanning ? 'Reading with Claude Vision...' : statusText}
-            </p>
+            <p className="text-white text-sm font-bold tracking-wide uppercase">{statusText}</p>
           </div>
         </div>
       </div>
@@ -278,11 +302,8 @@ Rules:
       <div className="relative z-20 bg-[#1c1d15] pb-12 pt-6 border-t border-white/5">
         <div className="flex justify-center mb-8">
           <div className="flex bg-white/5 p-1 rounded-full gap-1">
-            <button
-              onClick={toggleFlash}
-              disabled={!hasTorch}
-              className={`flex items-center gap-2 px-6 py-2 rounded-full transition-all ${flashOn ? 'bg-[#626a2f] text-white shadow-lg' : 'text-white/50'} ${!hasTorch ? 'opacity-20' : ''}`}
-            >
+            <button onClick={toggleFlash} disabled={!hasTorch}
+              className={`flex items-center gap-2 px-6 py-2 rounded-full transition-all ${flashOn ? 'bg-[#626a2f] text-white shadow-lg' : 'text-white/50'} ${!hasTorch ? 'opacity-20' : ''}`}>
               <span className="material-symbols-outlined text-[20px]">{flashOn ? 'bolt' : 'flash_off'}</span>
               <span className="text-[10px] font-bold uppercase tracking-wider">{flashOn ? 'Flash On' : 'Flash Off'}</span>
             </button>
@@ -294,12 +315,10 @@ Rules:
         </div>
 
         <div className="flex items-center justify-around px-8">
-          {/* Gallery */}
-          <button
-            onClick={() => galleryInputRef.current?.click()}
-            className="flex flex-col items-center gap-1 group cursor-pointer active:scale-95 transition-transform"
-          >
-            <div className="w-14 h-14 rounded-xl overflow-hidden border-2 border-white/20 relative shadow-inner bg-white/5 flex items-center justify-center">
+          {/* Gallery — opens photo library */}
+          <button onClick={() => galleryInputRef.current?.click()}
+            className="flex flex-col items-center gap-1 group cursor-pointer active:scale-95 transition-transform">
+            <div className="w-14 h-14 rounded-xl bg-white/5 border-2 border-white/20 flex items-center justify-center">
               <span className="material-symbols-outlined text-white text-2xl">photo_library</span>
             </div>
             <span className="text-[9px] font-bold uppercase tracking-widest text-white/40">Gallery</span>
@@ -308,11 +327,8 @@ Rules:
           {/* Shutter */}
           <div className="relative flex items-center justify-center">
             <div className={`absolute size-24 border-2 border-white/20 rounded-full ${isScanning ? 'animate-spin border-t-[#626a2f]' : 'animate-pulse'}`} />
-            <button
-              onClick={handleCapture}
-              disabled={isScanning}
-              className={`size-20 bg-[#626a2f] rounded-full flex items-center justify-center shadow-xl active:scale-90 transition-all ${isScanning ? 'opacity-50' : ''}`}
-            >
+            <button onClick={handleCapture} disabled={isScanning}
+              className={`size-20 bg-[#626a2f] rounded-full flex items-center justify-center shadow-xl active:scale-90 transition-all ${isScanning ? 'opacity-50' : ''}`}>
               <span className="material-symbols-outlined text-white text-4xl" style={{ fontVariationSettings: "'FILL' 1" }}>
                 {isScanning ? 'sync' : 'photo_camera'}
               </span>
@@ -320,10 +336,8 @@ Rules:
           </div>
 
           {/* Files */}
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="flex flex-col items-center gap-1 text-white/70 active:scale-95 transition-transform"
-          >
+          <button onClick={() => fileInputRef.current?.click()}
+            className="flex flex-col items-center gap-1 text-white/70 active:scale-95 transition-transform">
             <div className="size-14 rounded-xl bg-white/5 flex items-center justify-center border border-white/10">
               <span className="material-symbols-outlined text-2xl">folder_open</span>
             </div>
@@ -344,26 +358,21 @@ Rules:
               <div>
                 <h3 className="text-2xl font-black tracking-tight text-white mb-3">How to Scan</h3>
                 <div className="space-y-4 text-left">
-                  <div className="flex gap-4">
-                    <span className="text-[#626a2f] font-black">01</span>
-                    <p className="text-[#b6baa1] text-sm leading-relaxed">Align the cookbook page or recipe card vertically within the green frame.</p>
-                  </div>
-                  <div className="flex gap-4">
-                    <span className="text-[#626a2f] font-black">02</span>
-                    <p className="text-[#b6baa1] text-sm leading-relaxed">Good lighting helps — tap Flash if needed. Make sure all text is readable.</p>
-                  </div>
-                  <div className="flex gap-4">
-                    <span className="text-[#626a2f] font-black">03</span>
-                    <p className="text-[#b6baa1] text-sm leading-relaxed">Tap the shutter. Claude Vision reads the recipe and extracts ingredients and steps automatically.</p>
-                  </div>
-                  <div className="flex gap-4">
-                    <span className="text-[#626a2f] font-black">04</span>
-                    <p className="text-[#b6baa1] text-sm leading-relaxed">You can also tap Gallery or Files to scan a photo or PDF instead of using the live camera.</p>
-                  </div>
+                  {[
+                    'Align the cookbook page or recipe card vertically within the green frame.',
+                    'Good lighting helps — use Flash if needed. Make sure all text is readable.',
+                    'Tap the shutter. Claude Vision reads the recipe and extracts everything automatically.',
+                    'You can also tap Gallery to pick a photo from your camera roll, or Files for a PDF.',
+                  ].map((tip, i) => (
+                    <div key={i} className="flex gap-4">
+                      <span className="text-[#626a2f] font-black shrink-0">0{i + 1}</span>
+                      <p className="text-[#b6baa1] text-sm leading-relaxed">{tip}</p>
+                    </div>
+                  ))}
                 </div>
               </div>
               <button onClick={() => setShowHelp(false)}
-                className="w-full h-14 bg-[#626a2f] text-white font-black rounded-2xl shadow-xl shadow-[#626a2f]/20 active:scale-95 transition-transform">
+                className="w-full h-14 bg-[#626a2f] text-white font-black rounded-2xl shadow-xl active:scale-95 transition-transform">
                 Got it, Chef
               </button>
             </div>
@@ -373,9 +382,9 @@ Rules:
 
       <style>{`
         @keyframes scan {
-          0% { top: 0%; opacity: 0; }
-          10% { opacity: 1; }
-          90% { opacity: 1; }
+          0%   { top: 0%;   opacity: 0; }
+          10%  { opacity: 1; }
+          90%  { opacity: 1; }
           100% { top: 100%; opacity: 0; }
         }
       `}</style>
