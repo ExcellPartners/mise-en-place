@@ -2,7 +2,20 @@ import React, { useState, useEffect, useRef, useMemo, useLayoutEffect } from 're
 import { useAuth } from './contexts/AuthContext';
 import { SYNC_HISTORY } from './mockData';
 import { Recipe, PantryItem, MealPlan, StoreLocation, StoreMapping, MasterIngredient, ShoppingListItem, RecipeIngredient, MyItem } from './types';
-import { fetchFullAppData, restockPantryFromShopping, consumeIngredientsFromPantry, addNewPantryItemToSheet, addMasterToPantry, saveRecipeToSheet, updateUserProfile, updateRecipeFavoriteInSheet, addNewMyItemToSheet } from './services/googleSheets';
+import {
+  fetchFullAppData,
+  restockPantryFromShopping,
+  consumeIngredientsFromPantry,
+  addNewPantryItemToSheet,
+  addMasterToPantry,
+  saveRecipeToSheet,
+  updateUserProfile,
+  updateRecipeFavoriteInSheet,
+  addNewMyItemToSheet,
+  saveMealPlanToSheet,
+  markMealAsCooked,
+  removeMealPlanFromSheet,
+} from './services/googleSheets';
 import { consolidateShoppingList } from './utils/logic';
 import Home from './screens/Home';
 import RecipeDetail from './screens/RecipeDetail';
@@ -50,25 +63,19 @@ export interface RawShoppingEntry {
   completed?: boolean;
 }
 
-const Toast: React.FC<{ message: string; isVisible: boolean }> = ({ message, isVisible }) => {
-  return (
-    <div 
-      className={`fixed top-24 left-1/2 -translate-x-1/2 z-[300] transition-all duration-500 transform pointer-events-none ${
-        isVisible ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0'
-      }`}
-    >
-      <div className="bg-[#1a1d14]/95 backdrop-blur-xl border border-white/10 rounded-2xl px-6 py-3 shadow-2xl flex items-center gap-3">
-        <span className="material-symbols-outlined text-[#636b2f] text-xl fill-1">check_circle</span>
-        <p className="text-white text-sm font-bold tracking-wide">{message}</p>
-      </div>
+const Toast: React.FC<{ message: string; isVisible: boolean }> = ({ message, isVisible }) => (
+  <div className={`fixed top-24 left-1/2 -translate-x-1/2 z-[300] transition-all duration-500 transform pointer-events-none ${isVisible ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0'}`}>
+    <div className="bg-[#1a1d14]/95 backdrop-blur-xl border border-white/10 rounded-2xl px-6 py-3 shadow-2xl flex items-center gap-3">
+      <span className="material-symbols-outlined text-[#636b2f] text-xl fill-1">check_circle</span>
+      <p className="text-white text-sm font-bold tracking-wide">{message}</p>
     </div>
-  );
-};
+  </div>
+);
 
 const App: React.FC = () => {
   const { accessToken, userEmail, userName, spreadsheetId, logout, isAuthenticated, isProfileComplete, completeProfile, login } = useAuth();
   const [viewStack, setViewStack] = useState<View[]>(() => !isAuthenticated ? ['login'] : !isProfileComplete ? ['onboarding'] : ['recipes']);
-  
+
   useEffect(() => {
     if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
   }, []);
@@ -82,8 +89,7 @@ const App: React.FC = () => {
   const [masterIngredients, setMasterIngredients] = useState<MasterIngredient[]>([]);
   const [myItemsList, setMyItemsList] = useState<MyItem[]>([]);
   const [mappings, setMappings] = useState<StoreMapping[]>([]);
-  
-  // Profile State
+
   const [userAvatar, setUserAvatar] = useState<string>(() => localStorage.getItem('mise_user_avatar') || '');
   const [userBio, setUserBio] = useState<string>(() => localStorage.getItem('mise_user_bio') || '');
 
@@ -96,7 +102,7 @@ const App: React.FC = () => {
     const saved = localStorage.getItem('mise_active_trip_raw');
     return saved ? JSON.parse(saved) : [];
   });
-  
+
   const [pantry, setPantry] = useState<PantryItem[]>(() => {
     const saved = localStorage.getItem('mise_pantry');
     return saved ? JSON.parse(saved) : [];
@@ -109,6 +115,8 @@ const App: React.FC = () => {
   const [mealPlans, setMealPlans] = useState<MealPlan[]>(() => {
     try { const s = localStorage.getItem('mise_meal_plans'); return s ? JSON.parse(s) : []; } catch { return []; }
   });
+
+  // Persist meal plans to localStorage AND Sheet
   const setMealPlansAndSync = (updater: MealPlan[] | ((p: MealPlan[]) => MealPlan[])) => {
     setMealPlans(prev => {
       const next = typeof updater === 'function' ? updater(prev) : updater;
@@ -117,7 +125,7 @@ const App: React.FC = () => {
     });
   };
 
-  const [cookedHistory, setCookedHistory] = useState<{date: string; recipeId: string; recipeName?: string}[]>(() => {
+  const [cookedHistory, setCookedHistory] = useState<{ date: string; recipeId: string; recipeName?: string }[]>(() => {
     try { const s = localStorage.getItem('mise_cooked_history'); return s ? JSON.parse(s) : []; } catch { return []; }
   });
 
@@ -137,7 +145,6 @@ const App: React.FC = () => {
   const [navDirection, setNavDirection] = useState<'forward' | 'back' | 'root'>('root');
   const [screenKey, setScreenKey] = useState(0);
 
-  // Swipe Gesture State
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
   const [touchStartY, setTouchStartY] = useState<number | null>(null);
@@ -152,19 +159,15 @@ const App: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Handle Scroll Restoration Logic
   const prevViewRef = useRef<string>('recipes');
 
   useEffect(() => {
     const activeView = viewStack[viewStack.length - 1];
     prevViewRef.current = activeView;
     if (!mainRef.current) return;
-
     if (activeView === 'recipes') {
       const savedPos = recipesScrollRef.current;
-      requestAnimationFrame(() => {
-        if (mainRef.current) mainRef.current.scrollTop = savedPos;
-      });
+      requestAnimationFrame(() => { if (mainRef.current) mainRef.current.scrollTop = savedPos; });
     } else {
       mainRef.current.scrollTop = 0;
     }
@@ -175,17 +178,23 @@ const App: React.FC = () => {
     setIsAutoMapping(true);
     try {
       const data = await fetchFullAppData(spreadsheetId);
-      if (data) { 
-        setRecipesList(data.recipes); 
-        setMasterIngredients(data.masters); 
-        setMappings(data.storeMappings); 
-        setMyItemsList(data.myItems); 
+      if (data) {
+        setRecipesList(data.recipes);
+        setMasterIngredients(data.masters);
+        setMappings(data.storeMappings);
+        setMyItemsList(data.myItems);
         if (data.pantry) setPantry(data.pantry);
         if (data.collectionImages) setCollectionImages(data.collectionImages);
-        
+
         // Sync Likes from Column N
         const remoteLikes = data.recipes.filter(r => r.isFavorite).map(r => r.id);
         setLikedRecipeIds(remoteLikes);
+
+        // ── Sync Meal Plans from Sheet (Planned rows only) ──────────────────
+        if (data.mealPlans && data.mealPlans.length > 0) {
+          setMealPlans(data.mealPlans);
+          localStorage.setItem('mise_meal_plans', JSON.stringify(data.mealPlans));
+        }
       }
     } finally { setIsAutoMapping(false); }
   }
@@ -213,7 +222,6 @@ const App: React.FC = () => {
     setViewStack([view]);
   };
 
-  // Swipe Handlers
   const onTouchStart = (e: React.TouchEvent) => {
     setTouchEnd(null);
     setTouchStart(e.targetTouches[0].clientX);
@@ -226,7 +234,6 @@ const App: React.FC = () => {
     if (!touchStart || !touchEnd || !touchStartY) return;
     const horizontalDistance = touchStart - touchEnd;
     const verticalDistance = Math.abs(e.changedTouches[0].clientY - touchStartY);
-    // Only trigger if clearly horizontal (not a scroll) and far enough
     const isRightSwipe = horizontalDistance < -80 && verticalDistance < 40;
     if (isRightSwipe && viewStack.length > 1) handleBack();
   };
@@ -247,25 +254,18 @@ const App: React.FC = () => {
   };
 
   const handleToggleLike = async (id: string) => {
-    // 1. Optimistic UI Update
     const recipe = recipesList.find(r => r.id === id);
     const newStatus = !recipe?.isFavorite;
-    
     setRecipesList(prev => prev.map(r => r.id === id ? { ...r, isFavorite: newStatus } : r));
     setLikedRecipeIds(prev => {
       const next = newStatus ? [...prev, id] : prev.filter(x => x !== id);
       localStorage.setItem('mise_liked', JSON.stringify(next));
       return next;
     });
-    
-    // Update selected recipe if it's open
     if (selectedRecipe && selectedRecipe.id === id) {
-        setSelectedRecipe(prev => prev ? { ...prev, isFavorite: newStatus } : null);
+      setSelectedRecipe(prev => prev ? { ...prev, isFavorite: newStatus } : null);
     }
-
     showToast(newStatus ? 'Added to Favorites' : 'Removed from Favorites');
-
-    // 2. Background Sync
     if (spreadsheetId) {
       await updateRecipeFavoriteInSheet(spreadsheetId, id, newStatus, accessToken);
     }
@@ -277,32 +277,67 @@ const App: React.FC = () => {
     localStorage.removeItem('mise_active_trip');
   };
 
-  const handleRemoveMealPlan = (date: string, mealType: string) => {
+  // ── Meal plan handlers — write to Sheet on every change ──────────────────────
+
+  const handleScheduleMeal = async (date: string, mealType: MealPlan['mealType'], recipeId: string) => {
+    const newPlan: MealPlan = { date, mealType, recipeId, servings: 4 };
+    setMealPlansAndSync(prev => [...prev, newPlan]);
+    // Background write to Sheet
+    if (spreadsheetId) {
+      saveMealPlanToSheet(spreadsheetId, newPlan, accessToken).catch(console.error);
+    }
+  };
+
+  const handleRemoveMealPlan = async (date: string, mealType: string) => {
+    const plan = mealPlans.find(p => p.date === date && p.mealType === mealType);
     setMealPlansAndSync(prev => prev.filter(p => !(p.date === date && p.mealType === mealType)));
+    if (spreadsheetId && plan) {
+      removeMealPlanFromSheet(spreadsheetId, plan.recipeId, date, mealType, accessToken).catch(console.error);
+    }
+  };
+
+  /**
+   * Mark a single meal as cooked:
+   * - Flips its Sheet row to "Cooked"
+   * - Adds to cookedHistory
+   * - Removes from active mealPlans
+   */
+  const handleMarkMealCooked = async (plan: MealPlan) => {
+    const recipe = recipesList.find(r => r.id === plan.recipeId);
+
+    // 1. Update history
+    const historyEntry = { date: plan.date, recipeId: plan.recipeId, recipeName: recipe?.title };
+    const updatedHistory = [historyEntry, ...cookedHistory];
+    setCookedHistory(updatedHistory);
+    localStorage.setItem('mise_cooked_history', JSON.stringify(updatedHistory));
+
+    // 2. Remove from local plan
+    setMealPlansAndSync(prev => prev.filter(p => !(p.date === plan.date && p.mealType === plan.mealType)));
+
+    // 3. Flip Sheet row status
+    if (spreadsheetId) {
+      markMealAsCooked(spreadsheetId, plan.recipeId, plan.date, accessToken).catch(console.error);
+    }
+
+    showToast(`${recipe?.title || 'Meal'} marked as cooked!`);
   };
 
   const handleAddToShopping = (ing: MasterIngredient | MyItem | string | RecipeIngredient, source: 'recipe' | 'manual' | 'myItem', amountOverride?: number) => {
-    let name = typeof ing === 'string' ? ing : ing.name;
-    let amount = amountOverride || (ing as any).amount || 1;
-    let unit = (ing as any).unit || 'Unit';
+    const name = typeof ing === 'string' ? ing : ing.name;
+    const amount = amountOverride || (ing as any).amount || 1;
+    const unit = (ing as any).unit || 'Unit';
 
     setRawShoppingEntries(prev => {
       const existingIndex = prev.findIndex(
         entry => entry.name.toLowerCase() === name.toLowerCase() && entry.unit.toLowerCase() === unit.toLowerCase() && !entry.completed
       );
-
       let next;
       if (existingIndex >= 0) {
         next = [...prev];
-        next[existingIndex] = {
-          ...next[existingIndex],
-          amount: next[existingIndex].amount + amount
-        };
+        next[existingIndex] = { ...next[existingIndex], amount: next[existingIndex].amount + amount };
       } else {
-        const newEntry: RawShoppingEntry = { name, amount, unit, source, completed: false };
-        next = [...prev, newEntry];
+        next = [...prev, { name, amount, unit, source, completed: false }];
       }
-      
       localStorage.setItem('mise_active_trip_raw', JSON.stringify(next));
       return next;
     });
@@ -310,23 +345,15 @@ const App: React.FC = () => {
 
   const handleAddToPantry = async (ing: MasterIngredient) => {
     const newItem: PantryItem = {
-      name: ing.name,
-      inStock: true,
-      lowStock: false,
-      quantity: ing.unitsPerPurchase,
-      unit: ing.recipeUnit,
-      category: ing.category,
-      lastUpdated: new Date().toLocaleDateString()
+      name: ing.name, inStock: true, lowStock: false,
+      quantity: ing.unitsPerPurchase, unit: ing.recipeUnit,
+      category: ing.category, lastUpdated: new Date().toLocaleDateString()
     };
-    
     setPantry(prev => {
       const exists = prev.find(p => p.name.toLowerCase() === ing.name.toLowerCase());
-      if (exists) {
-        return prev.map(p => p.name.toLowerCase() === ing.name.toLowerCase() ? { ...p, inStock: true, quantity: (p.quantity || 0) + 1 } : p);
-      }
+      if (exists) return prev.map(p => p.name.toLowerCase() === ing.name.toLowerCase() ? { ...p, inStock: true, quantity: (p.quantity || 0) + 1 } : p);
       return [...prev, newItem];
     });
-
     if (spreadsheetId) {
       addMasterToPantry(spreadsheetId, ing, accessToken).then(() => triggerSync());
     }
@@ -336,11 +363,19 @@ const App: React.FC = () => {
     setRecipesList(prev => [...prev, recipe]);
     resetToView('recipes');
     showToast('Recipe Saved & Synced');
-
     if (spreadsheetId) {
       await saveRecipeToSheet(spreadsheetId, recipe, accessToken, masterIngredients);
-      triggerSync(); 
+      triggerSync();
     }
+  };
+
+  // Called from Collections "Add to Catalog" — adds to local list + Sheet
+  const handleRecipeSavedFromSearch = (recipe: Recipe) => {
+    setRecipesList(prev => {
+      if (prev.find(r => r.id === recipe.id)) return prev;
+      return [...prev, recipe];
+    });
+    showToast(`"${recipe.title}" added to your catalog!`);
   };
 
   const shoppingListConsolidated = useMemo(() => {
@@ -351,9 +386,7 @@ const App: React.FC = () => {
     setRawShoppingEntries(prev => {
       const entries = prev.filter(e => e.name.toLowerCase() === name.toLowerCase());
       const hasIncomplete = entries.some(e => !e.completed);
-      const newStatus = hasIncomplete; 
-
-      const next = prev.map(e => e.name.toLowerCase() === name.toLowerCase() ? { ...e, completed: newStatus } : e);
+      const next = prev.map(e => e.name.toLowerCase() === name.toLowerCase() ? { ...e, completed: hasIncomplete } : e);
       localStorage.setItem('mise_active_trip_raw', JSON.stringify(next));
       return next;
     });
@@ -378,36 +411,24 @@ const App: React.FC = () => {
   };
 
   const handleSaveNewMyItem = async (data: any) => {
-    // 1. Local Update
     const newItem: MyItem = {
-      name: data.name,
-      category: data.category,
-      packages: data.packages,
-      buyAs: data.buyAs,
+      name: data.name, category: data.category, packages: data.packages, buyAs: data.buyAs,
       aisle: { Monroe: data.monroe || '', Perinton: data.perinton || '', East: data.east || '' },
       shelf: { Monroe: '', Perinton: '', East: '' }
     };
     setMyItemsList(prev => [...prev, newItem]);
-    
-    // 2. Sheet Update
-    if (spreadsheetId) {
-      await addNewMyItemToSheet(spreadsheetId, data, accessToken);
-    }
-    
-    handleBack(); // Return to list
+    if (spreadsheetId) await addNewMyItemToSheet(spreadsheetId, data, accessToken);
+    handleBack();
     showToast(`Added ${data.name} to Catalog`);
   };
 
   const handleSaveProfile = async (data: { name: string; bio: string; avatarUrl: string }) => {
-    if (spreadsheetId) {
-      await updateUserProfile(spreadsheetId, data, accessToken);
-    }
+    if (spreadsheetId) await updateUserProfile(spreadsheetId, data, accessToken);
     login(data.name);
-    setUserAvatar(data.avatarUrl); // Update local avatar state
-    setUserBio(data.bio); // Update local bio state
-    
-    localStorage.setItem('mise_user_avatar', data.avatarUrl); // Persist
-    localStorage.setItem('mise_user_bio', data.bio); // Persist
+    setUserAvatar(data.avatarUrl);
+    setUserBio(data.bio);
+    localStorage.setItem('mise_user_avatar', data.avatarUrl);
+    localStorage.setItem('mise_user_bio', data.bio);
     handleBack();
   };
 
@@ -423,35 +444,33 @@ const App: React.FC = () => {
 
     if (currentView === 'login') return <Login />;
     if (currentView === 'onboarding') return <OnboardingProfile />;
-    if (currentView === 'profile') return <Profile user={{name: userName||'Chef', bio: userBio || 'Ready to Cook', avatarUrl: userAvatar}} onBack={handleBack} onSettings={() => navigateTo('settings')} onManageStores={() => navigateTo('storeManagement')} onLogout={logout} onAccountSettings={() => navigateTo('accountSettings')} onEditProfile={() => navigateTo('editProfile')} onHelpSupport={() => navigateTo('helpSupport')} />;
-    if (currentView === 'settings') return <SyncSettings currentAccount={userEmail||''} onBack={handleBack} onSync={() => triggerSync()} isSyncing={isAutoSyncing} onMapFields={() => navigateTo('fieldMapping')} onOpenHistory={() => navigateTo('syncHistory')} onOpenBackup={() => navigateTo('backupRestore')} onChangeAccount={() => navigateTo('changeAccount')} />;
+    if (currentView === 'profile') return <Profile user={{ name: userName || 'Chef', bio: userBio || 'Ready to Cook', avatarUrl: userAvatar }} onBack={handleBack} onSettings={() => navigateTo('settings')} onManageStores={() => navigateTo('storeManagement')} onLogout={logout} onAccountSettings={() => navigateTo('accountSettings')} onEditProfile={() => navigateTo('editProfile')} onHelpSupport={() => navigateTo('helpSupport')} />;
+    if (currentView === 'settings') return <SyncSettings currentAccount={userEmail || ''} onBack={handleBack} onSync={() => triggerSync()} isSyncing={isAutoSyncing} onMapFields={() => navigateTo('fieldMapping')} onOpenHistory={() => navigateTo('syncHistory')} onOpenBackup={() => navigateTo('backupRestore')} onChangeAccount={() => navigateTo('changeAccount')} />;
     if (currentView === 'storeManagement') return <StoreManagement mappings={mappings} onBack={handleBack} selectedStore={selectedStore} onStoreSelect={setSelectedStore} onSetDefault={(s) => { setSelectedStore(s); localStorage.setItem('mise_default_store', s); }} onOpenMap={() => showToast('Store mapping coming soon')} />;
     if (currentView === 'accountSettings') return <AccountSettings onBack={handleBack} onLogout={logout} />;
     if (currentView === 'helpSupport') return <HelpSupport onBack={handleBack} />;
-    
+
     if (currentView === 'addIngredient') {
       const isFromPantry = previousView === 'pantry';
-      return <AddIngredient 
-        masters={masterIngredients} 
-        mappings={mappings} 
-        onBack={handleBack} 
-        onAdd={isFromPantry ? handleAddToPantry : (m) => handleAddToShopping(m, 'recipe')} 
-        onAddNewManual={() => navigateTo('addPantryItem')} 
+      return <AddIngredient
+        masters={masterIngredients}
+        mappings={mappings}
+        onBack={handleBack}
+        onAdd={isFromPantry ? handleAddToPantry : (m) => handleAddToShopping(m, 'recipe')}
+        onAddNewManual={() => navigateTo('addPantryItem')}
         mode={isFromPantry ? 'pantry' : 'shopping'}
       />;
     }
 
     if (currentView === 'addMyItem') return <AddMyItem items={myItemsList} onBack={handleBack} onAdd={(i) => handleAddToShopping(i, 'myItem')} onAddNewManual={() => navigateTo('addNewMyItemEntry')} />;
     if (currentView === 'addNewMyItemEntry') return <AddNewMyItemEntry onBack={handleBack} onSave={handleSaveNewMyItem} />;
-    
     if (currentView === 'addPantryItem') return <AddPantryItem onBack={handleBack} onSave={handleSavePantryItem} />;
-    
-    if (currentView === 'syncHistory') return <SyncHistory history={SYNC_HISTORY} onBack={handleBack} onClear={() => {}} onResolve={(id) => navigateTo('planner')} />;
+    if (currentView === 'syncHistory') return <SyncHistory history={SYNC_HISTORY} onBack={handleBack} onClear={() => {}} onResolve={() => navigateTo('planner')} />;
     if (currentView === 'backupRestore') return <BackupRestore onBack={handleBack} />;
-
     if (currentView === 'config') return <PrecisionConfig masters={masterIngredients} pantry={pantry} mappings={mappings} selectedStore={selectedStore} onStoreChange={setSelectedStore} onUpdateMappings={setMappings} onBack={handleBack} />;
+    if (currentView === 'fieldMapping') return <FieldMapping onBack={handleBack} onConfirm={(count) => { showToast(`Synced ${count} recipes`); handleBack(); }} />;
 
-    if (currentView === 'collections') return <Collections 
+    if (currentView === 'collections') return <Collections
       recipes={recipesList}
       onBack={handleBack}
       onRecipeSelect={(r) => { setSelectedRecipe(r); navigateTo('recipeDetail'); }}
@@ -460,27 +479,42 @@ const App: React.FC = () => {
       pantry={pantry}
       cookedHistory={cookedHistory}
       collectionImages={collectionImages}
+      spreadsheetId={spreadsheetId}
+      accessToken={accessToken}
+      masterIngredients={masterIngredients}
+      onRecipeSaved={handleRecipeSavedFromSearch}
     />;
 
-    if (currentView === 'planner') return <Planner 
-      mealPlans={mealPlans} recipes={recipesList} pantry={pantry} pinnedIds={pinnedRecipeIds} 
+    if (currentView === 'planner') return <Planner
+      mealPlans={mealPlans}
+      recipes={recipesList}
+      pantry={pantry}
+      pinnedIds={pinnedRecipeIds}
       shoppingList={rawShoppingEntries}
-      onScheduleMeal={(d, t, id) => setMealPlansAndSync(prev => [...prev, {date:d, mealType:t, recipeId:id, servings:4}])} 
-      onGenerateShopping={() => resetToView('shopping')} onBack={handleBack} 
-      onStartCooking={(r) => { setSelectedRecipe(r); navigateTo('cookingMode'); }} 
-      onAddToShopping={(ings) => ings.forEach(ing => handleAddToShopping(ing, 'recipe'))} 
+      onScheduleMeal={handleScheduleMeal}
+      onGenerateShopping={() => resetToView('shopping')}
+      onBack={handleBack}
+      onStartCooking={(r) => { setSelectedRecipe(r); navigateTo('cookingMode'); }}
+      onAddToShopping={(ings) => ings.forEach(ing => handleAddToShopping(ing, 'recipe'))}
       onRemoveSlot={handleRemoveMealPlan}
+      onMarkCooked={handleMarkMealCooked}
       onClearItinerary={async () => {
-        // Logic 4B: Subtract from Pantry (Consume)
         setIsAutoMapping(true);
         const success = await consumeIngredientsFromPantry(spreadsheetId || '', shoppingListConsolidated, accessToken);
         if (success) {
-          // Archive to History for Recap
-          const newHistory = mealPlans.map(p => ({ date: p.date, recipeId: p.recipeId }));
-          const updatedHistory = [...cookedHistory, ...newHistory];
-          setCookedHistory(updatedHistory);
-          localStorage.setItem('mise_cooked_history', JSON.stringify(updatedHistory));
-
+          // Mark all current plans as cooked in batch
+          for (const plan of mealPlans) {
+            const recipe = recipesList.find(r => r.id === plan.recipeId);
+            const historyEntry = { date: plan.date, recipeId: plan.recipeId, recipeName: recipe?.title };
+            setCookedHistory(prev => {
+              const updated = [historyEntry, ...prev];
+              localStorage.setItem('mise_cooked_history', JSON.stringify(updated));
+              return updated;
+            });
+            if (spreadsheetId) {
+              markMealAsCooked(spreadsheetId, plan.recipeId, plan.date, accessToken).catch(console.error);
+            }
+          }
           setMealPlansAndSync([]);
           handleClearShoppingList();
           alert('Menu Archived & Ingredients Deducted from Pantry.');
@@ -492,61 +526,62 @@ const App: React.FC = () => {
       }}
     />;
 
-    if (currentView === 'shopping') return <ShoppingList 
-      mealPlans={mealPlans} recipes={recipesList} masters={masterIngredients} mappings={mappings} pantry={pantry} selectedStore={selectedStore} 
-      onStoreChange={setSelectedStore} onOpenMap={() => {}} onBack={handleBack} 
-      onCheckout={async (items) => { 
-        // Logic 4A: Add to Pantry (Restock)
-        setIsAutoMapping(true); 
-        const success = await restockPantryFromShopping(spreadsheetId || '', items, accessToken); 
+    if (currentView === 'shopping') return <ShoppingList
+      mealPlans={mealPlans} recipes={recipesList} masters={masterIngredients} mappings={mappings} pantry={pantry} selectedStore={selectedStore}
+      onStoreChange={setSelectedStore} onOpenMap={() => {}} onBack={handleBack}
+      onCheckout={async (items) => {
+        setIsAutoMapping(true);
+        const success = await restockPantryFromShopping(spreadsheetId || '', items, accessToken);
         if (success) {
-          handleClearShoppingList(); 
+          handleClearShoppingList();
           alert('Restock Complete! Items added to Pantry.');
-          resetToView('pantry'); 
-          triggerSync(); 
+          resetToView('pantry');
+          triggerSync();
         } else {
           alert('Checkout Failed. Check connection.');
         }
-        setIsAutoMapping(false); 
-      }} 
+        setIsAutoMapping(false);
+      }}
       onClearList={handleClearShoppingList}
-      onDeleteItem={handleDeleteItem} 
+      onDeleteItem={handleDeleteItem}
       onAddManualItem={(name) => handleAddToShopping(name, 'manual')}
-      itemsFromState={shoppingListConsolidated} 
-      onToggleItem={handleToggleItem} 
+      itemsFromState={shoppingListConsolidated}
+      onToggleItem={handleToggleItem}
       onOpenConfig={() => navigateTo('config')}
     />;
 
-    if (currentView === 'pantry') return <Pantry 
-      pantry={pantry} 
-      mappings={mappings} 
-      onUpdate={setPantry} 
-      onAddNew={() => navigateTo('addIngredient')} 
+    if (currentView === 'pantry') return <Pantry
+      pantry={pantry}
+      mappings={mappings}
+      onUpdate={setPantry}
+      onAddNew={() => navigateTo('addIngredient')}
       onAddToList={(item) => {
         handleAddToShopping(item.name, 'manual');
         showToast(`Added ${item.name} to Shopping List`);
       }}
     />;
 
-    if (currentView === 'recipeDetail') return null; // Rendered as fixed overlay outside main
+    if (currentView === 'recipeDetail') return null;
 
-    if (currentView === 'cookingMode') return selectedRecipe ? <CookingMode recipe={selectedRecipe} onExit={handleBack} timer={timerState} onUpdateTimer={setTimerState} /> : null;
-    
-    if (currentView === 'editProfile') return <EditProfile 
-      initialName={userName || 'Chef'} 
-      initialBio={userBio} 
-      initialAvatar={userAvatar} 
-      onBack={handleBack} 
-      onSave={handleSaveProfile} 
+    if (currentView === 'cookingMode') return selectedRecipe
+      ? <CookingMode recipe={selectedRecipe} onExit={handleBack} timer={timerState} onUpdateTimer={setTimerState} />
+      : null;
+
+    if (currentView === 'editProfile') return <EditProfile
+      initialName={userName || 'Chef'}
+      initialBio={userBio}
+      initialAvatar={userAvatar}
+      onBack={handleBack}
+      onSave={handleSaveProfile}
     />;
 
-    if (currentView === 'addRecipeManual') return <AddRecipeManual 
-      onBack={handleBack} 
+    if (currentView === 'addRecipeManual') return <AddRecipeManual
+      onBack={handleBack}
       onSave={handleSaveRecipe}
       initialData={scannedRecipeData}
     />;
 
-    if (currentView === 'scanRecipe') return <ScanRecipe 
+    if (currentView === 'scanRecipe') return <ScanRecipe
       onClose={handleBack}
       onRecipeFound={(recipe) => {
         setScannedRecipeData(recipe);
@@ -554,28 +589,28 @@ const App: React.FC = () => {
       }}
     />;
 
-    return <Home 
-      recipes={recipesList} 
-      pinnedIds={pinnedRecipeIds} 
+    return <Home
+      recipes={recipesList}
+      pinnedIds={pinnedRecipeIds}
       likedIds={likedRecipeIds}
       mealPlans={mealPlans}
       onTogglePin={handleTogglePin}
       onToggleLike={handleToggleLike}
       initialPage={recipePageRef.current}
       onPageChange={(p) => { recipePageRef.current = p; }}
-      onRecipeSelect={(r) => { 
+      onRecipeSelect={(r) => {
         if (mainRef.current) recipesScrollRef.current = mainRef.current.scrollTop;
-        setSelectedRecipe(r); 
-        navigateTo('recipeDetail'); 
-      }} 
+        setSelectedRecipe(r);
+        navigateTo('recipeDetail');
+      }}
       onSettingsOpen={() => {
         if (mainRef.current) recipesScrollRef.current = mainRef.current.scrollTop;
         navigateTo('profile');
-      }} 
+      }}
       onPlannerOpen={() => {
         if (mainRef.current) recipesScrollRef.current = mainRef.current.scrollTop;
         navigateTo('planner');
-      }} 
+      }}
       onCollectionsOpen={() => {
         if (mainRef.current) recipesScrollRef.current = mainRef.current.scrollTop;
         navigateTo('collections');
@@ -585,7 +620,7 @@ const App: React.FC = () => {
   };
 
   return (
-    <div 
+    <div
       className="min-h-screen bg-[#000000] text-gray-200 flex flex-col overflow-hidden"
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
@@ -595,7 +630,6 @@ const App: React.FC = () => {
       {isLoading && <SplashScreen progress={loadingProgress} />}
       <main ref={mainRef} className="flex-1 overflow-y-auto no-scrollbar pb-24">{renderView()}</main>
 
-      {/* RecipeDetail renders as its own fixed overlay — completely outside main's scroll context */}
       {viewStack[viewStack.length - 1] === 'recipeDetail' && selectedRecipe && (
         <div key={selectedRecipe.id} className="fixed inset-0 z-[200] overflow-y-auto no-scrollbar bg-background-dark">
           <RecipeDetail
@@ -615,22 +649,38 @@ const App: React.FC = () => {
       {isAuthenticated && isProfileComplete && !['login', 'onboarding', 'cookingMode', 'scanRecipe', 'addRecipeManual'].includes(viewStack[viewStack.length - 1]) && (
         <nav className="fixed bottom-0 left-0 right-0 bg-[#0a0c0a]/95 backdrop-blur-xl border-t border-gray-800 z-[100] nav-safe-pb">
           <div className="flex justify-around items-end px-4 pt-4 pb-2 w-full">
-            <button onClick={() => resetToView('recipes')} className={`flex flex-col items-center gap-1 transition-colors ${viewStack[viewStack.length-1] === 'recipes' ? 'text-primary' : 'text-gray-500'}`}><span className="material-symbols-outlined">home</span><span className="text-[10px] font-bold uppercase">Home</span></button>
-            <button onClick={() => resetToView('planner')} className={`flex flex-col items-center gap-1 transition-colors ${viewStack[viewStack.length-1] === 'planner' ? 'text-primary' : 'text-gray-500'}`}><span className="material-symbols-outlined">calendar_today</span><span className="text-[10px] font-medium uppercase">Planner</span></button>
-            <div className="relative -top-4"><button onClick={() => setIsAddOverlayOpen(true)} className="w-14 h-14 bg-primary rounded-full shadow-2xl flex items-center justify-center text-white ring-4 ring-[#0a0c0a]"><span className="material-symbols-outlined text-3xl font-bold">add</span></button></div>
-            <button onClick={() => resetToView('shopping')} className={`flex flex-col items-center gap-1 transition-colors ${viewStack[viewStack.length-1] === 'shopping' ? 'text-primary' : 'text-gray-500'}`}><span className="material-symbols-outlined">shopping_basket</span><span className="text-[10px] font-medium uppercase">Shopping</span></button>
-            <button onClick={() => resetToView('pantry')} className={`flex flex-col items-center gap-1 transition-colors ${viewStack[viewStack.length-1] === 'pantry' ? 'text-primary' : 'text-gray-500'}`}><span className="material-symbols-outlined">inventory_2</span><span className="text-[10px] font-medium uppercase">Pantry</span></button>
+            <button onClick={() => resetToView('recipes')} className={`flex flex-col items-center gap-1 transition-colors ${viewStack[viewStack.length - 1] === 'recipes' ? 'text-primary' : 'text-gray-500'}`}>
+              <span className="material-symbols-outlined">home</span>
+              <span className="text-[10px] font-bold uppercase">Home</span>
+            </button>
+            <button onClick={() => resetToView('planner')} className={`flex flex-col items-center gap-1 transition-colors ${viewStack[viewStack.length - 1] === 'planner' ? 'text-primary' : 'text-gray-500'}`}>
+              <span className="material-symbols-outlined">calendar_today</span>
+              <span className="text-[10px] font-medium uppercase">Planner</span>
+            </button>
+            <div className="relative -top-4">
+              <button onClick={() => setIsAddOverlayOpen(true)} className="w-14 h-14 bg-primary rounded-full shadow-2xl flex items-center justify-center text-white ring-4 ring-[#0a0c0a]">
+                <span className="material-symbols-outlined text-3xl font-bold">add</span>
+              </button>
+            </div>
+            <button onClick={() => resetToView('shopping')} className={`flex flex-col items-center gap-1 transition-colors ${viewStack[viewStack.length - 1] === 'shopping' ? 'text-primary' : 'text-gray-500'}`}>
+              <span className="material-symbols-outlined">shopping_basket</span>
+              <span className="text-[10px] font-medium uppercase">Shopping</span>
+            </button>
+            <button onClick={() => resetToView('pantry')} className={`flex flex-col items-center gap-1 transition-colors ${viewStack[viewStack.length - 1] === 'pantry' ? 'text-primary' : 'text-gray-500'}`}>
+              <span className="material-symbols-outlined">inventory_2</span>
+              <span className="text-[10px] font-medium uppercase">Pantry</span>
+            </button>
           </div>
         </nav>
       )}
 
       {isAddOverlayOpen && (
-        <AddOverlay 
-          onClose={() => setIsAddOverlayOpen(false)} 
+        <AddOverlay
+          onClose={() => setIsAddOverlayOpen(false)}
           onImportFromSheets={() => { setIsAddOverlayOpen(false); navigateTo('settings'); }}
-          onAddManual={() => { setIsAddOverlayOpen(false); navigateTo('addRecipeManual'); }} 
+          onAddManual={() => { setIsAddOverlayOpen(false); navigateTo('addRecipeManual'); }}
           onScan={() => { setIsAddOverlayOpen(false); navigateTo('scanRecipe'); }}
-          onAddIngredient={() => { setIsAddOverlayOpen(false); navigateTo('addIngredient'); }} 
+          onAddIngredient={() => { setIsAddOverlayOpen(false); navigateTo('addIngredient'); }}
           onAddMyItem={() => { setIsAddOverlayOpen(false); navigateTo('addMyItem'); }}
         />
       )}
