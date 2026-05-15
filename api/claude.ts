@@ -34,7 +34,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         anthropic_error: data,
       });
     }
-
+    console.log('Key being used:', apiKey?.slice(0, 20));
     return res.status(200).json(data);
   } catch (err: any) {
     console.error('Proxy error:', err);
