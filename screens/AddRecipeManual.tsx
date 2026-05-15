@@ -196,6 +196,7 @@ const AddRecipeManual: React.FC<AddRecipeManualProps> = ({
   const [isImporting, setIsImporting] = useState(false);
   const [isCommitting, setIsCommitting] = useState(false);
   const [commitPhase, setCommitPhase] = useState<'saving' | 'tagging' | 'done' | null>(null);
+  const [commitError, setCommitError] = useState<string | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
 
   const [title, setTitle] = useState('');
@@ -331,12 +332,63 @@ const AddRecipeManual: React.FC<AddRecipeManualProps> = ({
 
     setIsCommitting(true);
     setCommitPhase('saving');
+    setCommitError(null);
 
     try {
-      // 1. Await Sheet write + local state update (parent does NOT navigate)
+      // 1. Write directly to sheet from here — do not rely on parent
+      const targetId = spreadsheetId || '16ADJZBC80b4hF_TBqZP_4pCmBYVeMwtFNWLx59-Wyds';
+      const API_BASE = 'https://sheets.googleapis.com/v4/spreadsheets';
+      const API_KEY = 'AIzaSyDFc2raCSZfnfyM5n1fwrsbUco1njqHHMk';
+
+      // Build recipe row — A=ID, B=Title, C=Category, D=Serves, E=Prep, F=Cook,
+      // G=Difficulty, H=Score, I=Description, J=ChefTip, K=Instructions,
+      // L=Image, M=unused, N=Favorites, O=Date, P=unused, Q=SourceName, R=SourceAuthor, S=SourceURL
+      const recipeRow = [
+        recipe.id, recipe.title, recipe.category, recipe.baseServings,
+        recipe.prepTime, recipe.cookTime, recipe.difficulty, 0,
+        recipe.description, recipe.chefTip,
+        recipe.instructions.join('
+'),
+        recipe.imageUrl || '', '', 'FALSE',
+        new Date().toISOString(), '',
+        recipe.sourceName || '', recipe.sourceAuthor || '', recipe.sourceUrl || ''
+      ];
+
+      // Write to Recipes tab
+      if (accessToken) {
+        const recipeRes = await fetch(
+          `${API_BASE}/${targetId}/values/Recipes!A:S:append?valueInputOption=USER_ENTERED&key=${API_KEY}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
+            body: JSON.stringify({ range: 'Recipes!A:S', majorDimension: 'ROWS', values: [recipeRow] })
+          }
+        );
+        if (!recipeRes.ok) {
+          const err = await recipeRes.json().catch(() => ({}));
+          throw new Error(`Recipes tab: ${err.error?.message || recipeRes.status}`);
+        }
+
+        // Write to Components tab
+        const componentRows = recipe.ingredients.map(ing => [recipe.id, ing.name, ing.amount, ing.unit]);
+        if (componentRows.length > 0) {
+          await fetch(
+            `${API_BASE}/${targetId}/values/Components!A:D:append?valueInputOption=USER_ENTERED&key=${API_KEY}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
+              body: JSON.stringify({ range: 'Components!A:D', majorDimension: 'ROWS', values: componentRows })
+            }
+          );
+        }
+      } else {
+        throw new Error('Not authenticated — no access token. Try signing out and back in.');
+      }
+
+      // 2. Add to local state via parent
       await onSave(recipe);
 
-      // 2. AI Collections auto-tagging
+      // 3. AI Collections auto-tagging
       if (spreadsheetId && accessToken) {
         setCommitPhase('tagging');
         try {
@@ -350,26 +402,31 @@ const AddRecipeManual: React.FC<AddRecipeManualProps> = ({
       }
 
       setCommitPhase('done');
-      // Show success state briefly then navigate home
       setTimeout(() => {
         setIsCommitting(false);
         setCommitPhase(null);
-        onBack(); // ← AddRecipeManual owns navigation
+        onBack();
       }, 1200);
-    } catch (err) {
+    } catch (err: any) {
+      console.error('Save failed:', err);
+      setCommitError(err.message || 'Unknown error — check console');
       setIsCommitting(false);
       setCommitPhase(null);
     }
   };
 
   // ── Committing overlay ──────────────────────────────────────────────────────
-  if (isCommitting) {
+  if (isCommitting || commitError) {
     return (
       <div className="fixed inset-0 z-[200] bg-[#1c1d15] flex flex-col items-center justify-center p-10 text-center">
         <div className="relative mb-10">
           {commitPhase === 'done' ? (
             <div className="size-28 rounded-full bg-[#636b2f]/20 flex items-center justify-center border border-[#636b2f]/30">
               <span className="material-symbols-outlined text-[#636b2f] text-6xl" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
+            </div>
+          ) : commitError ? (
+            <div className="size-28 rounded-full bg-red-500/20 flex items-center justify-center border border-red-500/30">
+              <span className="material-symbols-outlined text-red-400 text-6xl">error</span>
             </div>
           ) : (
             <>
@@ -379,15 +436,25 @@ const AddRecipeManual: React.FC<AddRecipeManualProps> = ({
           )}
         </div>
         <h2 className="text-2xl font-black text-white mb-2 uppercase tracking-widest">
-          {commitPhase === 'done' ? 'Recipe Saved!' : commitPhase === 'tagging' ? 'Tagging Collections…' : 'Committing to Ledger…'}
+          {commitError ? 'Save Failed' : commitPhase === 'done' ? 'Recipe Saved!' : commitPhase === 'tagging' ? 'Tagging Collections…' : 'Committing to Ledger…'}
         </h2>
-        <p className="text-[#b6baa1] text-sm opacity-60 leading-relaxed">
-          {commitPhase === 'done'
-            ? 'Your recipe is live and searchable.'
-            : commitPhase === 'tagging'
-              ? 'Claude is placing this recipe in the right collections.'
-              : 'Writing to your Google Sheet…'}
+        <p className="text-[#b6baa1] text-sm leading-relaxed mb-6 px-4">
+          {commitError
+            ? commitError
+            : commitPhase === 'done'
+              ? 'Your recipe is live and searchable.'
+              : commitPhase === 'tagging'
+                ? 'Claude is placing this recipe in the right collections.'
+                : 'Writing to your Google Sheet…'}
         </p>
+        {commitError && (
+          <button
+            onClick={() => setCommitError(null)}
+            className="px-8 py-3 rounded-full bg-white/10 text-white font-black uppercase tracking-widest text-sm active:scale-95 transition-transform"
+          >
+            Go Back & Try Again
+          </button>
+        )}
       </div>
     );
   }
