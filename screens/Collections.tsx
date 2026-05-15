@@ -445,6 +445,99 @@ const Collections: React.FC<CollectionsProps> = ({
     }
   };
 
+  // ── Produce Professor ──────────────────────────────────────────────────────────
+  type ProducePhase = 'idle' | 'loading' | 'ready' | 'error';
+  interface ProduceItem {
+    name: string;
+    emoji: string;
+    peakWindow: string;
+    howToSelect: string;
+    howToStore: string;
+    flavorNotes: string;
+    keywords: string[]; // for recipe matching
+  }
+
+  const [showProfessor, setShowProfessor] = useState(false);
+  const [professorPhase, setProfessorPhase] = useState<ProducePhase>('idle');
+  const [produceItems, setProduceItems] = useState<ProduceItem[]>([]);
+  const [selectedProduce, setSelectedProduce] = useState<ProduceItem | null>(null);
+  const [professorError, setProfessorError] = useState('');
+
+  const currentSeason = (() => {
+    const m = new Date().getMonth(); // 0-11
+    if (m >= 2 && m <= 4) return 'Spring';
+    if (m >= 5 && m <= 7) return 'Summer';
+    if (m >= 8 && m <= 10) return 'Fall';
+    return 'Winter';
+  })();
+
+  const currentMonth = new Date().toLocaleString('en-US', { month: 'long' });
+
+  const fetchProduceProfessor = async () => {
+    setProfessorPhase('loading');
+    setProfessorError('');
+    try {
+      const prompt = `You are a seasonal produce expert. Generate a list of 10 produce items that are at their absolute peak in ${currentMonth} (${currentSeason}) in the northeastern United States (specifically Upstate New York / Rochester area).
+
+Return ONLY valid JSON, no markdown:
+{
+  "items": [
+    {
+      "name": "Ramps",
+      "emoji": "🌿",
+      "peakWindow": "Late April – Early May",
+      "howToSelect": "Look for bright green leaves and firm white bulbs. Avoid any yellowing.",
+      "howToStore": "Wrap in a damp paper towel and refrigerate for up to a week.",
+      "flavorNotes": "Intensely garlicky with a wild onion bite — more pungent than scallions.",
+      "keywords": ["ramp", "ramps", "wild garlic", "wild onion"]
+    }
+  ]
+}
+
+Rules:
+- Only include produce genuinely in peak season right now in ${currentMonth}
+- keywords array should include common name variations used in recipes
+- Be specific and educational — this is for a curious home cook
+- Include a mix of vegetables, fruits, and herbs`;
+
+      const res = await fetch('/api/claude', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 3000,
+          messages: [{ role: 'user', content: prompt }],
+        }),
+      });
+
+      if (!res.ok) throw new Error(`API error ${res.status}`);
+      const data = await res.json();
+      const rawText = (data.content as { type: string; text?: string }[])
+        ?.map(b => b.type === 'text' ? b.text : '').join('') || '';
+      const clean = rawText.replace(/```json|```/g, '').trim();
+      const s = clean.indexOf('{'); const e = clean.lastIndexOf('}');
+      if (s === -1) throw new Error('No data returned');
+      const parsed = JSON.parse(clean.slice(s, e + 1));
+      setProduceItems(parsed.items || []);
+      setProfessorPhase('ready');
+    } catch (err: any) {
+      setProfessorError(err.message || 'Could not load seasonal produce.');
+      setProfessorPhase('error');
+    }
+  };
+
+  const produceRecipes = useMemo(() => {
+    if (!selectedProduce) return [];
+    const kws = selectedProduce.keywords.map(k => k.toLowerCase());
+    return recipes.filter(r => {
+      const text = [
+        r.title, r.description, r.category,
+        ...(r.ingredients || []).map((i: RecipeIngredient) => i.name)
+      ].join(' ').toLowerCase();
+      return kws.some(kw => text.includes(kw));
+    });
+  }, [selectedProduce, recipes]);
+
   // ── Sources grouping ────────────────────────────────────────────────────────
   const sourceGroups = useMemo(() => {
     const groups: Record<string, Recipe[]> = {};
@@ -628,6 +721,170 @@ const Collections: React.FC<CollectionsProps> = ({
     );
   }
 
+  // ─── Produce Professor full-screen overlay ────────────────────────────────────
+  if (showProfessor) {
+    return (
+      <div className="bg-[#000000] min-h-screen text-white flex flex-col w-full">
+        <header className="sticky top-0 z-20 bg-[#000000]/90 backdrop-blur-md px-4 py-3 flex items-center justify-between border-b border-white/5 header-safe-pt">
+          <button onClick={() => { setShowProfessor(false); setSelectedProduce(null); }}
+            className="size-10 flex items-center justify-center active:scale-90 transition-transform">
+            <span className="material-symbols-outlined text-2xl font-bold">arrow_back</span>
+          </button>
+          <div className="flex-1 text-center">
+            <h1 className="text-lg font-black tracking-tight uppercase">The Produce Professor</h1>
+            <p className="text-[#636b2f] text-[9px] font-black uppercase tracking-[0.2em] mt-0.5">{currentSeason} · {currentMonth}</p>
+          </div>
+          <button onClick={fetchProduceProfessor} className="size-10 flex items-center justify-center text-[#636b2f] active:scale-90 transition-transform">
+            <span className={`material-symbols-outlined text-xl ${professorPhase === 'loading' ? 'animate-spin' : ''}`}>refresh</span>
+          </button>
+        </header>
+
+        <main className="flex-1 pb-32 overflow-y-auto">
+          {/* Loading */}
+          {professorPhase === 'loading' && (
+            <div className="flex flex-col items-center justify-center py-24 text-center px-8">
+              <div className="relative w-20 h-20 mb-6">
+                <div className="absolute inset-0 rounded-full border-2 border-[#636b2f]/20" />
+                <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-[#636b2f] animate-spin" />
+                <div className="absolute inset-0 flex items-center justify-center text-3xl">🥬</div>
+              </div>
+              <h2 className="text-xl font-black text-white mb-2">Consulting the Professor…</h2>
+              <p className="text-[#b6baa1] text-sm font-medium leading-relaxed max-w-xs">
+                Claude is checking what's at peak in {currentMonth} for your region.
+              </p>
+            </div>
+          )}
+
+          {/* Error */}
+          {professorPhase === 'error' && (
+            <div className="flex flex-col items-center justify-center py-24 text-center px-8 opacity-50">
+              <span className="text-5xl mb-4">😕</span>
+              <p className="font-bold text-base mb-2">Couldn't load seasonal data</p>
+              <p className="text-sm leading-relaxed">{professorError}</p>
+            </div>
+          )}
+
+          {/* Produce list */}
+          {professorPhase === 'ready' && !selectedProduce && (
+            <div className="px-4 pt-6">
+              <p className="text-[#b6baa1] text-sm font-medium leading-relaxed mb-6">
+                Tap any item to learn more and see matching recipes in your library.
+              </p>
+              <div className="space-y-3">
+                {produceItems.map((item, idx) => (
+                  <button key={idx} onClick={() => setSelectedProduce(item)}
+                    className="w-full flex items-center gap-4 p-4 bg-[#1c1d15] rounded-2xl border border-white/5 active:scale-[0.98] transition-transform text-left">
+                    <div className="size-14 rounded-xl bg-[#636b2f]/10 border border-[#636b2f]/20 flex items-center justify-center text-3xl shrink-0">
+                      {item.emoji}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-white font-black text-base leading-tight">{item.name}</p>
+                      <p className="text-[#636b2f] text-[10px] font-black uppercase tracking-widest mt-0.5">{item.peakWindow}</p>
+                      <p className="text-[#b6baa1] text-xs font-medium mt-1 line-clamp-1">{item.flavorNotes}</p>
+                    </div>
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      {(() => {
+                        const count = recipes.filter(r => {
+                          const text = [r.title, r.description, ...(r.ingredients || []).map((i: RecipeIngredient) => i.name)].join(' ').toLowerCase();
+                          return item.keywords.some(kw => text.includes(kw.toLowerCase()));
+                        }).length;
+                        return count > 0 ? (
+                          <span className="px-2 py-0.5 rounded-full bg-[#636b2f]/20 border border-[#636b2f]/30 text-[#636b2f] text-[9px] font-black uppercase tracking-widest">
+                            {count} recipe{count !== 1 ? 's' : ''}
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-white/20 text-[9px] font-black uppercase tracking-widest">
+                            No recipes
+                          </span>
+                        );
+                      })()}
+                      <span className="material-symbols-outlined text-white/20 text-lg">chevron_right</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Single produce detail + recipes */}
+          {professorPhase === 'ready' && selectedProduce && (
+            <div className="px-4 pt-4">
+              {/* Back to list */}
+              <button onClick={() => setSelectedProduce(null)}
+                className="flex items-center gap-2 text-[#636b2f] text-xs font-black uppercase tracking-widest mb-6 active:opacity-60">
+                <span className="material-symbols-outlined text-sm">arrow_back</span>
+                All {currentSeason} Produce
+              </button>
+
+              {/* Hero */}
+              <div className="rounded-3xl bg-[#1c1d15] border border-white/5 p-6 mb-6" style={{ background: 'linear-gradient(135deg, #1a2e1a 0%, #1c1d15 100%)' }}>
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="size-16 rounded-2xl bg-[#636b2f]/20 border border-[#636b2f]/30 flex items-center justify-center text-4xl">
+                    {selectedProduce.emoji}
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-black text-white tracking-tight">{selectedProduce.name}</h2>
+                    <p className="text-[#636b2f] text-[10px] font-black uppercase tracking-widest mt-0.5">Peak: {selectedProduce.peakWindow}</p>
+                  </div>
+                </div>
+                <p className="text-[#b6baa1] text-sm font-medium leading-relaxed italic mb-4">"{selectedProduce.flavorNotes}"</p>
+                <div className="space-y-3">
+                  <div className="flex gap-3 p-3 rounded-2xl bg-black/20">
+                    <span className="material-symbols-outlined text-[#636b2f] text-lg shrink-0">search</span>
+                    <div>
+                      <p className="text-white text-[10px] font-black uppercase tracking-widest mb-0.5">How to Select</p>
+                      <p className="text-[#b6baa1] text-xs font-medium leading-relaxed">{selectedProduce.howToSelect}</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-3 p-3 rounded-2xl bg-black/20">
+                    <span className="material-symbols-outlined text-[#636b2f] text-lg shrink-0">kitchen</span>
+                    <div>
+                      <p className="text-white text-[10px] font-black uppercase tracking-widest mb-0.5">How to Store</p>
+                      <p className="text-[#b6baa1] text-xs font-medium leading-relaxed">{selectedProduce.howToStore}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Matching recipes */}
+              <div>
+                <h3 className="text-white font-black text-lg mb-1">In Your Library</h3>
+                <p className="text-[#636b2f] text-[9px] font-black uppercase tracking-widest mb-4">
+                  {produceRecipes.length} recipe{produceRecipes.length !== 1 ? 's' : ''} featuring {selectedProduce.name.toLowerCase()}
+                </p>
+                {produceRecipes.length === 0 ? (
+                  <div className="flex flex-col items-center py-12 text-center opacity-40">
+                    <span className="text-4xl mb-3">{selectedProduce.emoji}</span>
+                    <p className="font-bold text-sm mb-1">No recipes yet</p>
+                    <p className="text-xs leading-relaxed max-w-[200px]">Try scanning a recipe or importing one that features {selectedProduce.name.toLowerCase()}.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {produceRecipes.map(recipe => (
+                      <div key={recipe.id} onClick={() => onRecipeSelect(recipe)}
+                        className="flex gap-4 p-3 bg-[#1c1d15] rounded-2xl border border-white/5 active:scale-[0.98] transition-transform cursor-pointer">
+                        <div className="w-16 h-16 rounded-xl overflow-hidden shrink-0 bg-white/5">
+                          <img src={formatImageUrl(recipe.imageUrl)} className="w-full h-full object-cover" alt={recipe.title}
+                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                        </div>
+                        <div className="flex flex-col justify-center flex-1 min-w-0">
+                          <span className="text-[#636b2f] text-[9px] font-black uppercase tracking-widest mb-0.5">{recipe.category}</span>
+                          <p className="text-white font-bold text-sm leading-tight line-clamp-1">{recipe.title}</p>
+                          {recipeTime(recipe) > 0 && <p className="text-white/30 text-[10px] font-bold uppercase tracking-widest mt-0.5">{recipeTime(recipe)} min</p>}
+                        </div>
+                        <span className="material-symbols-outlined text-white/20 text-xl self-center">chevron_right</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </main>
+      </div>
+    );
+  }
+
   // ─── Main view ──────────────────────────────────────────────────────────────
   const TABS = [
     { id: 'collections' as TabId, label: 'Browse',   icon: 'collections_bookmark' },
@@ -711,6 +968,35 @@ const Collections: React.FC<CollectionsProps> = ({
                 <p className="text-[10px] font-bold uppercase text-[#636b2f] tracking-widest mt-1 opacity-80">A recipe perfect for any time of year</p>
               </div>
               {renderCards(COLLECTIONS_DATA.seasonal)}
+            </section>
+
+            {/* ── Produce Professor card ── */}
+            <section className="px-4 mb-8">
+              <button
+                onClick={() => { setShowProfessor(true); if (professorPhase === 'idle') fetchProduceProfessor(); }}
+                className="w-full rounded-3xl overflow-hidden relative active:scale-[0.98] transition-transform group"
+                style={{ background: 'linear-gradient(135deg, #1a2e1a 0%, #0f1f0f 100%)' }}
+              >
+                <div className="absolute inset-0 opacity-20" style={{ background: 'radial-gradient(ellipse at 80% 20%, #636b2f 0%, transparent 60%)' }} />
+                <div className="relative z-10 p-6 text-left">
+                  <div className="flex items-start justify-between mb-4">
+                    <div>
+                      <p className="text-[#636b2f] text-[9px] font-black uppercase tracking-[0.3em] mb-1">{currentSeason} · {currentMonth}</p>
+                      <h2 className="text-white text-2xl font-black tracking-tight leading-tight">The Produce<br/>Professor</h2>
+                    </div>
+                    <div className="size-14 rounded-2xl bg-[#636b2f]/20 border border-[#636b2f]/30 flex items-center justify-center text-3xl shrink-0">
+                      🥬
+                    </div>
+                  </div>
+                  <p className="text-[#b6baa1] text-sm font-medium leading-relaxed mb-4">
+                    What's at peak right now in your region? Tap to explore what's in season, how to pick it, and find it in your recipe library.
+                  </p>
+                  <div className="flex items-center gap-2 text-[#636b2f]">
+                    <span className="material-symbols-outlined text-sm">eco</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest">Powered by Claude · Updated monthly</span>
+                  </div>
+                </div>
+              </button>
             </section>
           </>
         )}
