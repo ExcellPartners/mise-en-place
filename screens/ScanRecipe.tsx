@@ -10,7 +10,8 @@ const VALID_UNITS = ['tsp', 'tbsp', 'lb', 'cup', 'oz', 'g', 'kg', 'ml', 'l', 'pi
 
 const toSentenceCase = (str: string): string => {
   if (!str) return str;
-  return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+  const s = str.trim();
+  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 };
 
 const ScanRecipe: React.FC<ScanRecipeProps> = ({ onClose, onRecipeFound }) => {
@@ -18,7 +19,7 @@ const ScanRecipe: React.FC<ScanRecipeProps> = ({ onClose, onRecipeFound }) => {
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const trackRef = useRef<MediaStreamTrack | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
+  const readinessTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const [flashOn, setFlashOn] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
@@ -28,23 +29,20 @@ const ScanRecipe: React.FC<ScanRecipeProps> = ({ onClose, onRecipeFound }) => {
   const [statusText, setStatusText] = useState('Starting camera…');
   const [errorText, setErrorText] = useState<string | null>(null);
   const [cameraReady, setCameraReady] = useState(false);
-
-  // Multi-page stacking
-  const [stagedImages, setStagedImages] = useState<string[]>([]); // base64 array
+  const [stagedImages, setStagedImages] = useState<string[]>([]);
   const [showStack, setShowStack] = useState(false);
 
-  // ── Camera startup ──────────────────────────────────────────────────────────
-  // Uses multiple readiness signals since onCanPlay is unreliable on Android Chrome
   const markReady = useCallback(() => {
-    if (!cameraReady) {
-      setCameraReady(true);
-      setStatusText('Align page in vertical frame');
+    setCameraReady(true);
+    setStatusText('Align page in frame — tap shutter');
+    if (readinessTimerRef.current) {
+      clearInterval(readinessTimerRef.current);
+      readinessTimerRef.current = null;
     }
-  }, [cameraReady]);
+  }, []);
 
   useEffect(() => {
     let stream: MediaStream | null = null;
-    let readinessTimer: ReturnType<typeof setInterval> | null = null;
 
     async function startCamera() {
       try {
@@ -55,44 +53,38 @@ const ScanRecipe: React.FC<ScanRecipeProps> = ({ onClose, onRecipeFound }) => {
       } catch {
         try {
           stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-        } catch (err) {
+        } catch {
           setErrorText('Camera access denied. Allow camera access in your browser settings.');
           return;
         }
       }
 
-      streamRef.current = stream;
-      if (videoRef.current && stream) {
-        videoRef.current.srcObject = stream;
-        const track = stream.getVideoTracks()[0];
-        trackRef.current = track;
-        const capabilities = track.getCapabilities() as any;
-        if (capabilities?.torch) setHasTorch(true);
+      if (!stream || !videoRef.current) return;
 
-        try { await videoRef.current.play(); } catch (e) { console.warn('autoplay blocked:', e); }
+      videoRef.current.srcObject = stream;
+      const track = stream.getVideoTracks()[0];
+      trackRef.current = track;
+      const caps = track.getCapabilities() as any;
+      if (caps?.torch) setHasTorch(true);
 
-        // Poll videoWidth — most reliable readiness signal on Android Chrome
-        readinessTimer = setInterval(() => {
-          if (videoRef.current && videoRef.current.videoWidth > 0) {
-            if (readinessTimer) clearInterval(readinessTimer);
-            markReady();
-          }
-        }, 200);
+      try { await videoRef.current.play(); } catch (e) { console.warn('autoplay:', e); }
 
-        // Fallback: force-ready after 4s regardless
-        setTimeout(() => {
-          if (readinessTimer) clearInterval(readinessTimer);
-          markReady();
-        }, 4000);
-      }
+      // Poll videoWidth — most reliable on Android Chrome
+      readinessTimerRef.current = setInterval(() => {
+        if (videoRef.current && videoRef.current.videoWidth > 0) markReady();
+      }, 150);
+
+      // Hard fallback after 5s
+      setTimeout(markReady, 5000);
     }
 
     startCamera();
+
     return () => {
-      if (readinessTimer) clearInterval(readinessTimer);
+      if (readinessTimerRef.current) clearInterval(readinessTimerRef.current);
       if (stream) stream.getTracks().forEach(t => t.stop());
     };
-  }, []);
+  }, [markReady]);
 
   const toggleFlash = async () => {
     if (!trackRef.current || !hasTorch) return;
@@ -103,36 +95,25 @@ const ScanRecipe: React.FC<ScanRecipeProps> = ({ onClose, onRecipeFound }) => {
     } catch (err) { console.error('Flash error:', err); }
   };
 
-  // ── Process images (single or multi-page stack) ─────────────────────────────
   const processImages = async (pages: string[], previewUrl: string) => {
     setIsScanning(true);
     setErrorText(null);
-    setStatusText(pages.length > 1 ? `Processing ${pages.length} pages…` : 'Reading recipe with Claude…');
+    setStatusText(pages.length > 1 ? `Processing ${pages.length} pages…` : 'Reading with Claude…');
 
     try {
       const content: any[] = [];
-
-      // Add all pages as image blocks
       pages.forEach((b64, i) => {
-        if (pages.length > 1) {
-          content.push({ type: 'text', text: `Page ${i + 1} of ${pages.length}:` });
-        }
-        content.push({
-          type: 'image',
-          source: { type: 'base64', media_type: 'image/jpeg', data: b64 },
-        });
+        if (pages.length > 1) content.push({ type: 'text', text: `Page ${i + 1} of ${pages.length}:` });
+        content.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: b64 } });
       });
 
-      content.push({
-        type: 'text',
-        text: `Extract the complete recipe from ${pages.length > 1 ? 'these pages' : 'this image'}.
+      content.push({ type: 'text', text: `Extract the complete recipe from ${pages.length > 1 ? 'these pages' : 'this image'}.
 
 CRITICAL INGREDIENT RULES:
-- Strip ALL processing descriptors from ingredient names: minced, chopped, diced, sliced, halved, melted, crushed, grated, shredded, peeled, trimmed, softened, room temperature, beaten, sifted, packed, heaping
-- "4 cloves garlic minced" → name: "Garlic", amount: 4, unit: "clove"  
-- "2 cups onion diced" → name: "Onion", amount: 2, unit: "cup"
-- Ingredient name must be just the food item in Title Case — no adjectives, no prep verbs
-- If stripping descriptors, collect them into a prepWork array
+- Strip ALL processing descriptors from ingredient names: minced, chopped, diced, sliced, halved, melted, crushed, grated, shredded, peeled, trimmed, softened, room temperature, beaten, sifted
+- "4 cloves garlic minced" → name: "Garlic", amount: 4, unit: "clove"
+- Ingredient name = just the food item in Title Case, no prep verbs
+- Collect stripped descriptors into prepWork array
 
 Return ONLY valid JSON, no markdown:
 {
@@ -148,15 +129,9 @@ Return ONLY valid JSON, no markdown:
   "prepWork": ["Mince the garlic", "Dice the onion"],
   "instructions": ["Step 1 text", "Step 2 text"]
 }
-
-Rules:
-- category: Main | Side | Appetizer | Dessert | Beverage | Breakfast
-- difficulty: Easy | Medium | Hard
-- unit: tsp | tbsp | cup | oz | lb | g | kg | ml | l | pinch | clove | unit | slice | can | bag | pack
-- description and chefTip must be sentence case (capitalize first word only)
-- prepWork: array of prep actions stripped from ingredients — empty [] if none needed
-- instructions: original recipe steps only (prepWork will be prepended automatically)`
-      });
+category: Main|Side|Appetizer|Dessert|Beverage|Breakfast
+difficulty: Easy|Medium|Hard
+unit: tsp|tbsp|cup|oz|lb|g|kg|ml|l|pinch|clove|unit|slice|can|bag|pack` });
 
       const response = await fetch('/api/claude', {
         method: 'POST',
@@ -176,15 +151,11 @@ Rules:
       const data = await response.json();
       const rawText = (data.content as { type: string; text?: string }[])
         ?.map(b => (b.type === 'text' ? b.text : '')).join('') || '';
-
       const clean = rawText.replace(/```json|```/g, '').trim();
-      const jsonStart = clean.indexOf('{');
-      const jsonEnd = clean.lastIndexOf('}');
-      if (jsonStart === -1) throw new Error('Could not parse recipe data from image');
+      const s = clean.indexOf('{'); const e = clean.lastIndexOf('}');
+      if (s === -1) throw new Error('Could not parse recipe data from image');
 
-      const result = JSON.parse(clean.slice(jsonStart, jsonEnd + 1));
-
-      // Build instructions: inject prep work as Step 1 if any
+      const result = JSON.parse(clean.slice(s, e + 1));
       const prepWork: string[] = result.prepWork || [];
       const originalSteps: string[] = Array.isArray(result.instructions) ? result.instructions : [];
       const finalInstructions = prepWork.length > 0
@@ -211,39 +182,34 @@ Rules:
       };
 
       setStagedImages([]);
+      setShowStack(false);
       onRecipeFound(extractedRecipe);
 
     } catch (err: any) {
       console.error('Scan failed:', err);
-      if (err.message?.includes('busy') || err.message?.includes('529') || err.message?.includes('503')) {
-        setErrorText('Claude is busy right now. Wait a moment and try again.');
-      } else {
-        setErrorText(`Scan failed: ${err.message || 'Unknown error'}`);
-      }
+      setErrorText(err.message?.includes('busy') || err.message?.includes('529')
+        ? 'Claude is busy — wait a moment and try again.'
+        : `Scan failed: ${err.message || 'Unknown error'}`);
     } finally {
       setIsScanning(false);
-      setStatusText('Align page in vertical frame');
+      setStatusText('Align page in frame — tap shutter');
     }
   };
 
-  // ── Capture from live camera ────────────────────────────────────────────────
-  const handleCapture = async () => {
+  const handleCapture = () => {
     if (!videoRef.current) return;
-
-    // videoWidth > 0 is the most reliable check — more reliable than readyState or cameraReady state
     const vw = videoRef.current.videoWidth;
     const vh = videoRef.current.videoHeight;
     if (vw === 0 || vh === 0) {
-      setErrorText('Camera not ready yet — wait a moment and try again.');
+      setErrorText('Camera still loading — try again in a moment.');
       return;
     }
 
     setIsShutterFlash(true);
-    setTimeout(() => setIsShutterFlash(false), 150);
+    setTimeout(() => setIsShutterFlash(false), 120);
 
     const canvas = document.createElement('canvas');
-    canvas.width = vw;
-    canvas.height = vh;
+    canvas.width = vw; canvas.height = vh;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     ctx.drawImage(videoRef.current, 0, 0);
@@ -251,29 +217,25 @@ Rules:
     const base64 = canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
     const previewUrl = canvas.toDataURL('image/jpeg', 0.4);
 
-    if (stagedImages.length > 0 || showStack) {
-      // Add to stack
+    if (showStack) {
       setStagedImages(prev => [...prev, base64]);
-      setShowStack(true);
-      setStatusText(`Page ${stagedImages.length + 1} captured — add more or process`);
+      setStatusText(`${stagedImages.length + 1} pages — add more or Process All`);
     } else {
-      // Single page — process immediately
-      await processImages([base64], previewUrl);
+      processImages([base64], previewUrl);
     }
   };
 
-  // ── File/gallery picker ─────────────────────────────────────────────────────
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    if (files.length === 0) return;
+    if (!files.length) return;
 
-    let processed = 0;
+    let done = 0;
     const newPages: string[] = [];
 
     files.forEach(file => {
       const reader = new FileReader();
-      reader.onload = async (event) => {
-        const dataUrl = event.target?.result as string;
+      reader.onload = (ev) => {
+        const dataUrl = ev.target?.result as string;
         const img = new Image();
         img.onload = () => {
           const canvas = document.createElement('canvas');
@@ -285,15 +247,15 @@ Rules:
           if (!ctx) return;
           ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
           newPages.push(canvas.toDataURL('image/jpeg', 0.85).split(',')[1]);
-          processed++;
-          if (processed === files.length) {
-            const allPages = [...stagedImages, ...newPages];
-            if (allPages.length === 1) {
-              processImages(allPages, dataUrl);
+          done++;
+          if (done === files.length) {
+            const all = [...stagedImages, ...newPages];
+            if (all.length === 1) {
+              processImages(all, dataUrl);
             } else {
-              setStagedImages(allPages);
+              setStagedImages(all);
               setShowStack(true);
-              setStatusText(`${allPages.length} pages ready — tap Process All`);
+              setStatusText(`${all.length} pages ready — tap Process All`);
             }
           }
         };
@@ -301,26 +263,23 @@ Rules:
       };
       reader.readAsDataURL(file);
     });
-
     e.target.value = '';
   };
 
-  const handleProcessStack = async () => {
-    if (stagedImages.length === 0) return;
-    await processImages(stagedImages, '');
-  };
+  // ── Layout: fixed bottom controls so video CANNOT overlap them ──────────────
+  // The camera view uses position absolute and fills its container.
+  // Controls are fixed to the bottom of the viewport — outside all stacking contexts.
+  const CONTROLS_HEIGHT = 180; // px — controls panel height
 
-  // ── Render ──────────────────────────────────────────────────────────────────
   return (
-    <div className="bg-[#1c1d15] text-white h-screen flex flex-col w-full overflow-hidden relative">
+    <div className="bg-[#1c1d15] text-white w-full overflow-hidden" style={{ height: '100dvh' }}>
 
-      {/* File inputs */}
-      {/* Gallery: no capture attr → opens photo library; multiple for multi-page */}
+      {/* Hidden file inputs */}
       <input type="file" ref={galleryInputRef} onChange={handleFileChange} accept="image/*" multiple className="hidden" />
       <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*,application/pdf" multiple className="hidden" />
 
-      {/* Header */}
-      <div className="relative z-20 flex items-center bg-[#1c1d15] p-4 pb-2 justify-between header-safe-pt">
+      {/* Header — fixed top */}
+      <div className="absolute top-0 left-0 right-0 z-50 flex items-center bg-[#1c1d15] p-4 pb-2 justify-between header-safe-pt">
         <button onClick={onClose} className="text-white flex size-12 shrink-0 items-center justify-center active:scale-90 transition-transform">
           <span className="material-symbols-outlined text-3xl font-bold">close</span>
         </button>
@@ -333,117 +292,130 @@ Rules:
 
       {/* Error banner */}
       {errorText && (
-        <div className="mx-4 mb-2 p-4 rounded-2xl bg-red-500/20 border border-red-500/30 flex gap-3 items-start z-30">
-          <span className="material-symbols-outlined text-red-400 text-xl shrink-0">error</span>
+        <div className="absolute top-[72px] left-4 right-4 z-50 p-4 rounded-2xl bg-red-500/90 border border-red-400/50 flex gap-3 items-start backdrop-blur-md">
+          <span className="material-symbols-outlined text-white text-xl shrink-0">error</span>
           <div className="flex-1">
-            <p className="text-red-300 text-xs font-bold leading-relaxed">{errorText}</p>
-            <button onClick={() => setErrorText(null)} className="text-red-400/60 text-[10px] font-black uppercase tracking-widest mt-2">Dismiss</button>
+            <p className="text-white text-xs font-bold leading-relaxed">{errorText}</p>
+            <button onClick={() => setErrorText(null)} className="text-white/60 text-[10px] font-black uppercase tracking-widest mt-1">Dismiss</button>
           </div>
         </div>
       )}
 
       {/* Multi-page stack banner */}
       {showStack && stagedImages.length > 0 && (
-        <div className="mx-4 mb-2 p-4 rounded-2xl bg-[#636b2f]/20 border border-[#636b2f]/30 flex items-center gap-3 z-30">
-          <span className="material-symbols-outlined text-[#636b2f] text-xl">layers</span>
+        <div className="absolute top-[72px] left-4 right-4 z-50 p-3 rounded-2xl bg-[#636b2f]/90 border border-[#636b2f]/50 flex items-center gap-3 backdrop-blur-md">
+          <span className="material-symbols-outlined text-white text-xl">layers</span>
           <div className="flex-1">
-            <p className="text-white text-xs font-bold">{stagedImages.length} page{stagedImages.length > 1 ? 's' : ''} captured</p>
-            <p className="text-[#b6baa1] text-[10px] mt-0.5">Capture more pages or tap Process All</p>
+            <p className="text-white text-xs font-bold">{stagedImages.length} page{stagedImages.length !== 1 ? 's' : ''} staged</p>
+            <p className="text-white/70 text-[10px]">Tap shutter to add more, or Process All</p>
           </div>
-          <button
-            onClick={handleProcessStack}
-            disabled={isScanning}
-            className="px-4 py-2 rounded-xl bg-[#636b2f] text-white text-[10px] font-black uppercase tracking-widest active:scale-95 transition-transform shrink-0"
-          >
+          <button onClick={() => processImages(stagedImages, '')} disabled={isScanning}
+            className="px-3 py-1.5 rounded-xl bg-white text-[#636b2f] text-[10px] font-black uppercase tracking-widest active:scale-95 shrink-0">
             Process All
           </button>
-          <button onClick={() => { setStagedImages([]); setShowStack(false); setStatusText('Align page in vertical frame'); }}
-            className="text-white/30 active:scale-90">
+          <button onClick={() => { setStagedImages([]); setShowStack(false); setStatusText('Align page in frame — tap shutter'); }}
+            className="text-white/50 active:scale-90 shrink-0">
             <span className="material-symbols-outlined text-lg">close</span>
           </button>
         </div>
       )}
 
-      {/* Camera view — pointer-events-none only on overlays, not the whole view */}
-      <div className="relative flex-1 w-full bg-[#12130d] overflow-hidden flex items-center justify-center">
+      {/* Camera view — pointer-events-none so the native video element CANNOT intercept taps */}
+      <div
+        className="absolute inset-0 bg-[#12130d] pointer-events-none"
+        style={{ bottom: `${CONTROLS_HEIGHT}px`, top: 0 }}
+      >
         <video
           ref={videoRef}
-          autoPlay
-          muted
-          playsInline
+          autoPlay muted playsInline
           onLoadedData={markReady}
           onCanPlay={markReady}
-          onTimeUpdate={markReady}
           className="absolute inset-0 w-full h-full object-cover opacity-90"
-          style={{ zIndex: 0 }}
         />
 
-        {/* Shutter flash overlay — pointer-events-none so it doesn't block taps */}
-        {isShutterFlash && (
-          <div className="absolute inset-0 bg-white animate-out fade-out duration-150 pointer-events-none" style={{ zIndex: 5 }} />
-        )}
+        {/* Shutter flash */}
+        {isShutterFlash && <div className="absolute inset-0 bg-white pointer-events-none" style={{ opacity: 0.8 }} />}
 
-        {/* Scan frame — pointer-events-none so it doesn't block taps on the shutter */}
-        <div className="pointer-events-none relative w-[82%] max-h-[85%] aspect-[8.5/11] border-2 border-[#626a2f] rounded-2xl shadow-[0_0_150px_rgba(0,0,0,0.9)] bg-black/10" style={{ zIndex: 2 }}>
-          <div className="absolute -top-1 -left-1 w-16 h-16 border-t-4 border-l-4 border-[#626a2f] rounded-tl-xl" />
-          <div className="absolute -top-1 -right-1 w-16 h-16 border-t-4 border-r-4 border-[#626a2f] rounded-tr-xl" />
-          <div className="absolute -bottom-1 -left-1 w-16 h-16 border-b-4 border-l-4 border-[#626a2f] rounded-bl-xl" />
-          <div className="absolute -bottom-1 -right-1 w-16 h-16 border-b-4 border-r-4 border-[#626a2f] rounded-br-xl" />
-          <div className={`absolute left-0 w-full h-[3px] bg-[#626a2f] shadow-[0_0_20px_rgba(98,106,47,1)] ${isScanning ? 'animate-[scan_2.5s_linear_infinite]' : 'top-1/2 opacity-30 h-[1px]'}`} />
+        {/* Scan frame overlay */}
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="w-[82%] aspect-[8.5/11] max-h-[90%] border-2 border-[#626a2f] rounded-2xl relative">
+            <div className="absolute -top-1 -left-1 w-14 h-14 border-t-4 border-l-4 border-[#626a2f] rounded-tl-xl" />
+            <div className="absolute -top-1 -right-1 w-14 h-14 border-t-4 border-r-4 border-[#626a2f] rounded-tr-xl" />
+            <div className="absolute -bottom-1 -left-1 w-14 h-14 border-b-4 border-l-4 border-[#626a2f] rounded-bl-xl" />
+            <div className="absolute -bottom-1 -right-1 w-14 h-14 border-b-4 border-r-4 border-[#626a2f] rounded-br-xl" />
+            {isScanning && (
+              <div className="absolute left-0 w-full h-[3px] bg-[#626a2f] shadow-[0_0_20px_rgba(98,106,47,1)] animate-[scan_2.5s_linear_infinite]" />
+            )}
+          </div>
         </div>
 
-        {/* Status pill — pointer-events-none */}
-        <div className="pointer-events-none absolute bottom-8 left-0 right-0 flex justify-center px-6" style={{ zIndex: 3 }}>
-          <div className="bg-black/60 backdrop-blur-md px-8 py-3 rounded-2xl border border-white/10 text-center">
-            <p className="text-white text-sm font-bold tracking-wide uppercase">{statusText}</p>
+        {/* Status */}
+        <div className="absolute bottom-6 left-0 right-0 flex justify-center px-6">
+          <div className="bg-black/70 backdrop-blur-md px-6 py-2.5 rounded-2xl border border-white/10">
+            <p className="text-white text-sm font-bold tracking-wide uppercase text-center">{statusText}</p>
           </div>
         </div>
       </div>
 
-      {/* Controls — sits above camera, high z-index */}
-      <div className="relative bg-[#1c1d15] pb-12 pt-6 border-t border-white/5" style={{ zIndex: 20 }}>
-        <div className="flex justify-center mb-8">
+      {/* Controls — fixed to bottom, ABOVE the video in every stacking context */}
+      <div
+        className="absolute bottom-0 left-0 right-0 bg-[#1c1d15] border-t border-white/5"
+        style={{ height: `${CONTROLS_HEIGHT}px`, zIndex: 100 }}
+      >
+        {/* Flash / model toggle */}
+        <div className="flex justify-center pt-4 mb-5">
           <div className="flex bg-white/5 p-1 rounded-full gap-1">
-            <button onClick={toggleFlash} disabled={!hasTorch}
-              className={`flex items-center gap-2 px-6 py-2 rounded-full transition-all ${flashOn ? 'bg-[#626a2f] text-white shadow-lg' : 'text-white/50'} ${!hasTorch ? 'opacity-20' : ''}`}>
-              <span className="material-symbols-outlined text-[20px]">{flashOn ? 'bolt' : 'flash_off'}</span>
-              <span className="text-[10px] font-bold uppercase tracking-wider">{flashOn ? 'Flash On' : 'Flash Off'}</span>
+            <button
+              onClick={toggleFlash}
+              disabled={!hasTorch}
+              className={`flex items-center gap-2 px-5 py-2 rounded-full transition-all text-[10px] font-bold uppercase tracking-wider ${flashOn ? 'bg-[#626a2f] text-white' : 'text-white/50'} ${!hasTorch ? 'opacity-20' : ''}`}
+            >
+              <span className="material-symbols-outlined text-[18px]">{flashOn ? 'bolt' : 'flash_off'}</span>
+              {flashOn ? 'Flash On' : 'Flash'}
             </button>
-            <div className="flex items-center gap-2 px-6 py-2 rounded-full text-white/20">
-              <span className="material-symbols-outlined text-[20px]">auto_awesome</span>
-              <span className="text-[10px] font-bold uppercase tracking-wider">Claude Vision</span>
+            <div className="flex items-center gap-1.5 px-5 py-2 text-white/20 text-[10px] font-bold uppercase tracking-wider">
+              <span className="material-symbols-outlined text-[18px]">auto_awesome</span>
+              Claude Vision
             </div>
           </div>
         </div>
 
+        {/* Shutter row */}
         <div className="flex items-center justify-around px-8">
           {/* Gallery */}
-          <button onClick={() => galleryInputRef.current?.click()}
-            className="flex flex-col items-center gap-1 active:scale-95 transition-transform">
-            <div className="w-14 h-14 rounded-xl bg-white/5 border-2 border-white/20 flex items-center justify-center">
+          <button
+            onClick={() => galleryInputRef.current?.click()}
+            className="flex flex-col items-center gap-1 active:scale-95 transition-transform"
+          >
+            <div className="w-13 h-13 size-[52px] rounded-xl bg-white/5 border-2 border-white/20 flex items-center justify-center">
               <span className="material-symbols-outlined text-white text-2xl">photo_library</span>
             </div>
             <span className="text-[9px] font-bold uppercase tracking-widest text-white/40">Gallery</span>
           </button>
 
-          {/* Shutter — NO disabled state based on cameraReady; always tappable */}
-          <div className="relative flex items-center justify-center">
-            <div className={`absolute size-24 border-2 border-white/20 rounded-full ${isScanning ? 'animate-spin border-t-[#626a2f]' : 'animate-pulse'}`} />
-            <button
-              onClick={handleCapture}
-              disabled={isScanning}
-              className={`size-20 bg-[#626a2f] rounded-full flex items-center justify-center shadow-xl active:scale-90 transition-all ${isScanning ? 'opacity-50' : 'opacity-100'}`}
+          {/* Shutter button — this is the critical one */}
+          <button
+            onClick={handleCapture}
+            disabled={isScanning}
+            className={`size-[72px] rounded-full flex items-center justify-center shadow-xl transition-all ${
+              isScanning ? 'bg-[#626a2f]/50' : 'bg-[#626a2f] active:scale-90'
+            }`}
+            style={{ WebkitTapHighlightColor: 'transparent' }}
+          >
+            <span
+              className={`material-symbols-outlined text-white text-4xl ${isScanning ? 'animate-spin' : ''}`}
+              style={{ fontVariationSettings: "'FILL' 1" }}
             >
-              <span className="material-symbols-outlined text-white text-4xl" style={{ fontVariationSettings: "'FILL' 1" }}>
-                {isScanning ? 'sync' : stagedImages.length > 0 ? 'add_a_photo' : 'photo_camera'}
-              </span>
-            </button>
-          </div>
+              {isScanning ? 'sync' : showStack && stagedImages.length > 0 ? 'add_a_photo' : 'photo_camera'}
+            </span>
+          </button>
 
           {/* Files */}
-          <button onClick={() => fileInputRef.current?.click()}
-            className="flex flex-col items-center gap-1 active:scale-95 transition-transform">
-            <div className="size-14 rounded-xl bg-white/5 flex items-center justify-center border border-white/10">
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="flex flex-col items-center gap-1 active:scale-95 transition-transform"
+          >
+            <div className="size-[52px] rounded-xl bg-white/5 flex items-center justify-center border border-white/10">
               <span className="material-symbols-outlined text-2xl">folder_open</span>
             </div>
             <span className="text-[9px] font-bold uppercase tracking-widest text-white/40">Files</span>
@@ -453,10 +425,9 @@ Rules:
 
       {/* Help modal */}
       {showHelp && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 backdrop-blur-xl bg-black/60 animate-in fade-in duration-300">
-          <div className="w-full max-w-[340px] bg-[#2a2c21] rounded-[2.5rem] p-8 border border-white/10 shadow-2xl overflow-hidden relative">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-[#626a2f]/10 rounded-full blur-3xl -mr-16 -mt-16" />
-            <div className="flex flex-col items-center text-center gap-6 relative z-10">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 backdrop-blur-xl bg-black/70">
+          <div className="w-full max-w-[340px] bg-[#2a2c21] rounded-[2.5rem] p-8 border border-white/10 shadow-2xl">
+            <div className="flex flex-col items-center text-center gap-6">
               <div className="size-20 rounded-3xl bg-[#626a2f]/20 flex items-center justify-center border border-[#626a2f]/30">
                 <span className="material-symbols-outlined text-[#626a2f] text-5xl" style={{ fontVariationSettings: "'FILL' 1" }}>auto_fix_high</span>
               </div>
@@ -464,10 +435,10 @@ Rules:
                 <h3 className="text-2xl font-black tracking-tight text-white mb-3">How to Scan</h3>
                 <div className="space-y-4 text-left">
                   {[
-                    'Align the cookbook page vertically within the green frame.',
-                    'Tap the shutter. For multi-page recipes, keep tapping to stack pages — a banner will appear.',
-                    'Tap "Process All" when all pages are captured. Claude reads everything at once.',
-                    'Gallery and Files also support multiple selections for multi-page stacking.',
+                    'Align the cookbook page vertically. The camera loads automatically.',
+                    'Tap the shutter button. For multi-page recipes, tap once per page — a banner will appear.',
+                    'Tap "Process All" when all pages are staged. Claude reads everything at once.',
+                    'Gallery and Files also support multiple images for multi-page stacking.',
                   ].map((tip, i) => (
                     <div key={i} className="flex gap-4">
                       <span className="text-[#626a2f] font-black shrink-0">0{i + 1}</span>
@@ -477,7 +448,7 @@ Rules:
                 </div>
               </div>
               <button onClick={() => setShowHelp(false)}
-                className="w-full h-14 bg-[#626a2f] text-white font-black rounded-2xl shadow-xl active:scale-95 transition-transform">
+                className="w-full h-14 bg-[#626a2f] text-white font-black rounded-2xl active:scale-95 transition-transform">
                 Got it, Chef
               </button>
             </div>

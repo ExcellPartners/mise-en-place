@@ -360,13 +360,17 @@ const App: React.FC = () => {
   };
 
   const handleSaveRecipe = async (recipe: Recipe) => {
-    setRecipesList(prev => [...prev, recipe]);
-    resetToView('recipes');
-    showToast('Recipe Saved & Synced');
+    // Instant local add — searchable immediately without refresh
+    setRecipesList(prev => prev.find(r => r.id === recipe.id) ? prev : [...prev, recipe]);
+    // Sheet write (AddRecipeManual commit overlay shows loading state)
     if (spreadsheetId) {
-      await saveRecipeToSheet(spreadsheetId, recipe, accessToken, masterIngredients);
-      triggerSync();
+      try {
+        await saveRecipeToSheet(spreadsheetId, recipe, accessToken, masterIngredients);
+        triggerSync();
+      } catch (err) { console.error('Sheet write failed:', err); }
     }
+    resetToView('recipes');
+    showToast(recipe.title + ' added to your catalog!');
   };
 
   // Called from Collections "Add to Catalog" — adds to local list + Sheet
@@ -579,6 +583,9 @@ const App: React.FC = () => {
       onBack={handleBack}
       onSave={handleSaveRecipe}
       initialData={scannedRecipeData}
+      existingIds={recipesList.map(r => r.id)}
+      spreadsheetId={spreadsheetId}
+      accessToken={accessToken}
     />;
 
     if (currentView === 'scanRecipe') return <ScanRecipe
