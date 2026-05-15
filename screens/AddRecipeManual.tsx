@@ -353,43 +353,30 @@ const AddRecipeManual: React.FC<AddRecipeManualProps> = ({
         recipe.sourceName || '', recipe.sourceAuthor || '', recipe.sourceUrl || ''
       ];
 
-      // Write to Recipes tab
-      if (accessToken) {
-        const recipeRes = await fetch(
-          `${API_BASE}/${targetId}/values/Recipes!A:S:append?valueInputOption=USER_ENTERED&key=${API_KEY}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
-            body: JSON.stringify({ range: 'Recipes!A:S', majorDimension: 'ROWS', values: [recipeRow] })
-          }
-        );
-        // Log regardless of success so we can see what's happening
-        const recipeBody = await recipeRes.text().catch(() => 'unreadable');
-        console.log('Sheet write status:', recipeRes.status, 'body:', recipeBody.slice(0, 500));
-        if (!recipeRes.ok) {
-          if (recipeRes.status === 401) {
-            throw new Error('Your Google session expired. Sign out from the Profile tab and sign back in with Google, then try again.');
-          }
-          if (recipeRes.status === 403) {
-            throw new Error('Permission denied (403). Make sure your Google account has edit access to the Sheet.');
-          }
-          throw new Error('Sheet write failed ' + recipeRes.status + ': ' + recipeBody.slice(0, 200));
-        }
+      // Write to Recipes tab via service account proxy (no OAuth needed)
+      const sheetProxyWrite = async (sheetUrl: string, body: any) => {
+        const res = await fetch('/api/claude', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'sheetWrite', sheetWrite: { method: 'POST', url: sheetUrl, body } }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Sheet write failed ' + res.status);
+        return data;
+      };
 
-        // Write to Components tab
-        const componentRows = recipe.ingredients.map(ing => [recipe.id, ing.name, ing.amount, ing.unit]);
-        if (componentRows.length > 0) {
-          await fetch(
-            `${API_BASE}/${targetId}/values/Components!A:D:append?valueInputOption=USER_ENTERED&key=${API_KEY}`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
-              body: JSON.stringify({ range: 'Components!A:D', majorDimension: 'ROWS', values: componentRows })
-            }
-          );
-        }
-      } else {
-        throw new Error('No access token available. Token value: ' + String(accessToken).slice(0, 20) + '. Try signing out and signing back in.');
+      await sheetProxyWrite(
+        `${API_BASE}/${targetId}/values/Recipes!A:S:append?valueInputOption=USER_ENTERED&key=${API_KEY}`,
+        { range: 'Recipes!A:S', majorDimension: 'ROWS', values: [recipeRow] }
+      );
+
+      // Write to Components tab
+      const componentRows = recipe.ingredients.map((ing: any) => [recipe.id, ing.name, ing.amount, ing.unit]);
+      if (componentRows.length > 0) {
+        await sheetProxyWrite(
+          `${API_BASE}/${targetId}/values/Components!A:D:append?valueInputOption=USER_ENTERED&key=${API_KEY}`,
+          { range: 'Components!A:D', majorDimension: 'ROWS', values: componentRows }
+        );
       }
 
       // 2. Add to local state via parent

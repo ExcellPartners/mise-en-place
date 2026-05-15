@@ -1,6 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import * as crypto from 'crypto';
 
-const getApiKey = () => process.env.ANTHROPIC_API_KEY || process.env.VITE_ANTHROPIC_API_KEY || '';
+// ── Anthropic helpers ──────────────────────────────────────────────────────────
+const getAnthropicKey = () =>
+  process.env.ANTHROPIC_API_KEY || process.env.VITE_ANTHROPIC_API_KEY || '';
 
 function extractText(html: string): string {
   return html
@@ -17,17 +20,98 @@ function extractText(html: string): string {
     .slice(0, 12000);
 }
 
+// ── Google Service Account JWT ─────────────────────────────────────────────────
+// Generates a short-lived access token from the service account JSON key.
+// No external libraries needed — pure Node.js crypto.
+
+function base64url(input: Buffer | string): string {
+  const buf = typeof input === 'string' ? Buffer.from(input) : input;
+  return buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+}
+
+async function getServiceAccountToken(): Promise<string> {
+  const keyJson = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
+  if (!keyJson) throw new Error('GOOGLE_SERVICE_ACCOUNT_KEY not set in Vercel environment variables.');
+
+  const key = JSON.parse(keyJson);
+  const now = Math.floor(Date.now() / 1000);
+
+  const header = base64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
+  const payload = base64url(JSON.stringify({
+    iss: key.client_email,
+    scope: 'https://www.googleapis.com/auth/spreadsheets',
+    aud: 'https://oauth2.googleapis.com/token',
+    iat: now,
+    exp: now + 3600,
+  }));
+
+  const signingInput = `${header}.${payload}`;
+
+  // Sign with RS256 using the private key
+  const sign = crypto.createSign('RSA-SHA256');
+  sign.update(signingInput);
+  const signature = base64url(sign.sign(key.private_key));
+
+  const jwt = `${signingInput}.${signature}`;
+
+  // Exchange JWT for access token
+  const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+      assertion: jwt,
+    }),
+  });
+
+  const tokenData = await tokenRes.json();
+  if (!tokenData.access_token) {
+    throw new Error('Failed to get service account token: ' + JSON.stringify(tokenData));
+  }
+  return tokenData.access_token;
+}
+
+// ── Main handler ───────────────────────────────────────────────────────────────
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const key = getApiKey();
-  if (!key) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not set in Vercel environment variables.' });
+  const { action, url, sheetWrite, ...claudeBody } = req.body || {};
 
-  const { url, ...claudeBody } = req.body || {};
+  // ── Google Sheets write via service account ──────────────────────────────────
+  // Called with { action: 'sheetWrite', sheetWrite: { method, url, body } }
+  if (action === 'sheetWrite') {
+    try {
+      const token = await getServiceAccountToken();
+      const { method = 'POST', url: sheetUrl, body: sheetBody } = sheetWrite;
+
+      const sheetRes = await fetch(sheetUrl, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(sheetBody),
+      });
+
+      const data = await sheetRes.json();
+      if (!sheetRes.ok) {
+        return res.status(sheetRes.status).json({ error: data.error?.message || 'Sheet write failed', detail: data });
+      }
+      return res.status(200).json(data);
+    } catch (err: any) {
+      console.error('Sheet write error:', err);
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // ── Anthropic API call ───────────────────────────────────────────────────────
+  const anthropicKey = getAnthropicKey();
+  if (!anthropicKey) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not set in Vercel.' });
 
   try {
     let body = claudeBody;
 
+    // Server-side page fetch for web import
     if (url) {
       let pageText = '';
       try {
@@ -62,20 +146,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': key,
+        'x-api-key': anthropicKey,
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify(body),
     });
 
     const data = await response.json();
-
     if (!response.ok) {
       return res.status(response.status).json({
         error: data.error?.message || `Anthropic returned ${response.status}`,
       });
     }
-
     return res.status(200).json(data);
   } catch (err: any) {
     console.error('Proxy error:', err);
