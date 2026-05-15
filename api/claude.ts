@@ -1,5 +1,7 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
 import * as crypto from 'crypto';
+
+type VercelRequest = any;
+type VercelResponse = any;
 
 // ── Anthropic helpers ──────────────────────────────────────────────────────────
 const getAnthropicKey = () =>
