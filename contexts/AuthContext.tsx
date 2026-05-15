@@ -84,9 +84,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     localStorage.removeItem('mise_profile_complete');
   };
 
-  // isAuthenticated requires a real Google token (starts with ya29.)
-  // A mock token or expired token won't work for Sheet writes
-  const isAuthenticated = !!accessToken;
+  // Since all Sheet writes go through the service account proxy,
+  // we don't need a real Google token — just need the user to have logged in
+  const isAuthenticated = !!userName || !!accessToken;
 
   return (
     <AuthContext.Provider value={{
