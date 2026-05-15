@@ -343,7 +343,9 @@ const AddRecipeManual: React.FC<AddRecipeManualProps> = ({
       // Build recipe row — A=ID, B=Title, C=Category, D=Serves, E=Prep, F=Cook,
       // G=Difficulty, H=Score, I=Description, J=ChefTip, K=Instructions,
       // L=Image, M=unused, N=Favorites, O=Date, P=unused, Q=SourceName, R=SourceAuthor, S=SourceURL
-      const truncate = (s: string, max = 45000) => (s || '').slice(0, max);
+      // Strip base64 data URIs — they're too large for Sheets and useless as a stored URL
+      const stripBase64 = (s: string) => s?.startsWith('data:') ? '' : (s || '');
+      const truncate = (s: string, max = 45000) => stripBase64(s).slice(0, max);
       const recipeRow = [
         recipe.id, recipe.title, recipe.category, recipe.baseServings,
         recipe.prepTime, recipe.cookTime, recipe.difficulty, 0,

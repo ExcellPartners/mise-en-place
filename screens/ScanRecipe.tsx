@@ -178,7 +178,7 @@ unit: tsp|tbsp|cup|oz|lb|g|kg|ml|l|pinch|clove|unit|slice|can|bag|pack` });
           unit: VALID_UNITS.includes((ing.unit || '').toLowerCase()) ? ing.unit.toLowerCase() : 'unit',
         })),
         instructions: finalInstructions,
-        imageUrl: previewUrl,
+        imageUrl: '', // Leave blank — add image URL manually after saving
       };
 
       setStagedImages([]);
