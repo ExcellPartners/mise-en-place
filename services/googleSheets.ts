@@ -140,11 +140,11 @@ export async function fetchFullAppData(
         description: safeGet(row, 9), chefTip: safeGet(row, 10), imageUrl: safeGet(row, 12),
         ingredients: componentMap[rId] || [],
         instructions: rawInst.includes('\n') ? rawInst.split('\n').filter((s: string) => s.trim()) : [rawInst],
-        isFavorite: safeGet(row, 13, 'FALSE').toUpperCase() === 'TRUE',
+        isFavorite: safeGet(row, 13, 'FALSE').toUpperCase() === 'TRUE', // N
         dateAdded: safeGet(row, 14, new Date().toISOString()),
-        sourceName: safeGet(row, 16) || undefined,
-        sourceAuthor: safeGet(row, 17) || undefined,
-        sourceUrl: safeGet(row, 18) || undefined,
+        sourceName: safeGet(row, 16) || undefined,  // Q
+        sourceAuthor: safeGet(row, 17) || undefined, // R
+        sourceUrl: safeGet(row, 18) || undefined,   // S
       };
     }).filter(Boolean) as Recipe[];
 
@@ -176,14 +176,27 @@ export async function saveRecipeToSheet(
   existingMasters: MasterIngredient[] = []
 ): Promise<boolean> {
   try {
-    const tr = (s: string | undefined, max = 45000) => (s || '').slice(0, max);
+    const tr = (s: string | undefined, max = 45000) => (s?.startsWith('data:') ? '' : (s || '')).slice(0, max);
     const recipeRow = [
-      recipe.id, recipe.title, recipe.category, recipe.baseServings,
-      recipe.prepTime, recipe.cookTime, recipe.difficulty, 0,
-      tr(recipe.description, 2000), tr(recipe.chefTip, 1000),
-      tr(recipe.instructions.join('\n'), 40000),
-      tr(recipe.imageUrl, 500), '', 'FALSE', new Date().toISOString(), '',
-      tr(recipe.sourceName, 200), tr(recipe.sourceAuthor, 200), tr(recipe.sourceUrl, 500),
+      recipe.id,                                        // A - Recipe ID
+      recipe.title,                                     // B - Recipe Name
+      recipe.category,                                  // C - Category
+      recipe.ingredients.length,                        // D - # of Ingredients
+      recipe.baseServings,                              // E - Serves or Makes
+      recipe.prepTime,                                  // F - Prep (Minutes)
+      recipe.cookTime,                                  // G - Cook (Minutes)
+      recipe.difficulty,                                // H - Difficulty
+      0,                                                // I - Score
+      tr(recipe.description, 2000),                     // J - Description
+      tr(recipe.chefTip, 1000),                         // K - Chef's Tip
+      tr(recipe.instructions.join('\n'), 40000),       // L - Instructions
+      tr(recipe.imageUrl, 500),                         // M - Picture
+      'FALSE',                                          // N - Favorites
+      'FALSE',                                          // O - Complete Meal
+      '',                                               // P - Protein
+      tr(recipe.sourceName, 200),                       // Q - SourceName
+      tr(recipe.sourceAuthor, 200),                     // R - SourceAuthor
+      tr(recipe.sourceUrl, 500),                        // S - SourceURL
     ];
 
     await sheetWrite(appendUrl('Recipes', 'A:S'), { range: 'Recipes!A:S', majorDimension: 'ROWS', values: [recipeRow] });

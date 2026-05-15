@@ -359,19 +359,12 @@ const App: React.FC = () => {
     }
   };
 
-  // onSave ONLY writes data — does NOT navigate.
-  // AddRecipeManual owns navigation (calls onBack after its overlay completes).
+  // onSave ONLY updates local state — AddRecipeManual handles the Sheet write directly
+  // and owns navigation (calls onBack after its overlay completes).
   const handleSaveRecipe = async (recipe: Recipe): Promise<void> => {
-    // 1. Add to local state immediately — searchable right away
     setRecipesList(prev => prev.find(r => r.id === recipe.id) ? prev : [...prev, recipe]);
-    // 2. Write to Sheet
-    if (spreadsheetId) {
-      try {
-        await saveRecipeToSheet(spreadsheetId, recipe, accessToken, masterIngredients);
-        triggerSync();
-      } catch (err) { console.error('Sheet write failed:', err); }
-    }
-    // No navigation here — AddRecipeManual calls onBack after its own overlay
+    // Sheet write is done inside AddRecipeManual — do NOT call saveRecipeToSheet here
+    // to avoid writing twice. triggerSync will pick it up on next load.
   };
 
   // Called from Collections "Add to Catalog" — adds to local list + Sheet

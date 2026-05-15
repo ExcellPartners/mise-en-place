@@ -347,16 +347,25 @@ const AddRecipeManual: React.FC<AddRecipeManualProps> = ({
       const stripBase64 = (s: string) => s?.startsWith('data:') ? '' : (s || '');
       const truncate = (s: string, max = 45000) => stripBase64(s).slice(0, max);
       const recipeRow = [
-        recipe.id, recipe.title, recipe.category, recipe.baseServings,
-        recipe.prepTime, recipe.cookTime, recipe.difficulty, 0,
-        truncate(recipe.description, 2000),
-        truncate(recipe.chefTip, 1000),
-        truncate(recipe.instructions.join('\n'), 40000),
-        truncate(recipe.imageUrl || '', 500), '', 'FALSE',
-        new Date().toISOString(), '',
-        truncate(recipe.sourceName || '', 200),
-        truncate(recipe.sourceAuthor || '', 200),
-        truncate(recipe.sourceUrl || '', 500)
+        recipe.id,                                      // A - Recipe ID
+        recipe.title,                                   // B - Recipe Name
+        recipe.category,                                // C - Category
+        recipe.ingredients.length,                      // D - # of Ingredients
+        recipe.baseServings,                            // E - Serves or Makes
+        recipe.prepTime,                                // F - Prep (Minutes)
+        recipe.cookTime,                                // G - Cook (Minutes)
+        recipe.difficulty,                              // H - Difficulty
+        0,                                              // I - Score
+        truncate(recipe.description, 2000),             // J - Description
+        truncate(recipe.chefTip, 1000),                 // K - Chef's Tip
+        truncate(recipe.instructions.join('\n'), 40000), // L - Instructions
+        '',                                             // M - Picture (add later)
+        'FALSE',                                        // N - Favorites
+        'FALSE',                                        // O - Complete Meal
+        '',                                             // P - Protein
+        truncate(recipe.sourceName || '', 200),         // Q - SourceName
+        truncate(recipe.sourceAuthor || '', 200),       // R - SourceAuthor
+        truncate(recipe.sourceUrl || '', 500),          // S - SourceURL
       ];
 
       // Write to Recipes tab via service account proxy (no OAuth needed)
