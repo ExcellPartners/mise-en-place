@@ -369,12 +369,12 @@ const ShoppingList: React.FC<ShoppingListProps> = ({
             </div>
           )}
           <button
-            onClick={() => onCheckout?.(neededItems)}
+            onClick={() => onCheckout?.(neededItems.filter(i => i.completed))}
             disabled={completedCount === 0}
             className="w-full bg-[#636b2f] disabled:opacity-30 text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-[#636b2f]/20 active:scale-[0.98] transition-all text-base uppercase tracking-widest"
           >
             <span className="material-symbols-outlined">shopping_cart_checkout</span>
-            {completedCount > 0 ? `Checkout (${completedCount} items)` : 'Check Items to Checkout'}
+            {completedCount > 0 ? `Checkout ${completedCount} Checked Item${completedCount !== 1 ? 's' : ''}` : 'Check Items to Checkout'}
           </button>
         </div>
       </div>

@@ -289,10 +289,10 @@ export async function restockPantryFromShopping(_spreadsheetId: string, items: S
       const finalQty = currentQty + item.unitsToBuy * item.unitsPerPurchase;
 
       if (rowIdx !== -1) {
-        const range = `Pantry Stock!D${rowIdx + 1}:F${rowIdx + 1}`;
-        await sheetWrite(putUrl(range), { range, majorDimension: 'ROWS', values: [[finalQty, item.unit, today]] }, 'PUT');
+        const range = `Pantry Stock!D${rowIdx + 1}:G${rowIdx + 1}`;
+        await sheetWrite(putUrl(range), { range, majorDimension: 'ROWS', values: [[finalQty, item.unit, '', today]] }, 'PUT');
       } else {
-        await sheetWrite(appendUrl('Pantry Stock', 'A:F'), { range: 'Pantry Stock!A:F', majorDimension: 'ROWS', values: [[item.name, 'Yes', 'No', finalQty, item.unit, today]] });
+        await sheetWrite(appendUrl('Pantry Stock', 'A:G'), { range: 'Pantry Stock!A:G', majorDimension: 'ROWS', values: [[item.name, 'Yes', 'No', finalQty, item.unit, '', today]] });
       }
     }
     return true;
@@ -311,8 +311,8 @@ export async function consumeIngredientsFromPantry(_spreadsheetId: string, items
       const rowIdx = rows.findIndex((r: any[]) => r[0]?.toLowerCase().trim() === item.name.toLowerCase().trim());
       if (rowIdx !== -1) {
         const finalQty = Math.max(0, (parseFloat(rows[rowIdx][3]) || 0) - item.totalQuantityNeeded);
-        const range = `Pantry Stock!D${rowIdx + 1}:F${rowIdx + 1}`;
-        await sheetWrite(putUrl(range), { range, majorDimension: 'ROWS', values: [[finalQty, item.unit, today]] }, 'PUT');
+        const range = `Pantry Stock!D${rowIdx + 1}:G${rowIdx + 1}`;
+        await sheetWrite(putUrl(range), { range, majorDimension: 'ROWS', values: [[finalQty, item.unit, '', today]] }, 'PUT');
       }
     }
     return true;
@@ -331,7 +331,7 @@ export async function addMasterToPantry(_spreadsheetId: string, master: MasterIn
       const range = `Pantry Stock!B${rowIdx + 1}:C${rowIdx + 1}`;
       await sheetWrite(putUrl(range), { range, majorDimension: 'ROWS', values: [['Yes', 'No']] }, 'PUT');
     } else {
-      await sheetWrite(appendUrl('Pantry Stock', 'A:F'), { range: 'Pantry Stock!A:F', majorDimension: 'ROWS', values: [[master.name, 'Yes', 'No', master.unitsPerPurchase, master.recipeUnit, today]] });
+      await sheetWrite(appendUrl('Pantry Stock', 'A:G'), { range: 'Pantry Stock!A:G', majorDimension: 'ROWS', values: [[master.name, 'Yes', 'No', master.unitsPerPurchase, master.recipeUnit, '', today]] });
     }
     return true;
   } catch (err) { return false; }
