@@ -27,9 +27,10 @@ async function importRecipeFromUrl(url: string): Promise<{
   ingredients: { name: string; amount: number; unit: string }[];
   instructions: string[];
 }> {
-  const prompt = `Visit this recipe URL and extract the full recipe details: ${url}
+  // The proxy will fetch the page server-side and inject the text into this prompt
+  const prompt = `Extract the recipe from this page: ${url}
 
-Return ONLY valid JSON with no other text or markdown:
+Return ONLY valid JSON with no other text or markdown fences:
 {
   "title": "Recipe name",
   "description": "One sentence description of the dish",
@@ -38,33 +39,33 @@ Return ONLY valid JSON with no other text or markdown:
   "baseServings": 4,
   "category": "Main",
   "difficulty": "Medium",
-  "chefTip": "A useful tip from the recipe",
+  "chefTip": "A useful tip from the recipe, or empty string",
   "sourceName": "Website or publication name",
   "sourceUrl": "${url}",
   "ingredients": [
     { "name": "Ingredient Name", "amount": 1.5, "unit": "cup" }
   ],
   "instructions": [
-    "Step 1...",
-    "Step 2..."
+    "Step 1 full text",
+    "Step 2 full text"
   ]
 }
 
 Rules:
 - category must be one of: Main, Side, Appetizer, Dessert, Beverage, Breakfast
-- difficulty must be one of: Easy, Medium, Hard  
+- difficulty must be one of: Easy, Medium, Hard
 - unit must be one of: tsp, tbsp, cup, oz, lb, g, kg, ml, l, pinch, clove, unit, slice, can, bag, pack
 - Convert ingredient names to Title Case
-- Split instructions into individual steps
-- Extract the actual recipe from the page, not ads or related recipes`;
+- Split instructions into individual steps — do not combine them
+- Extract ONLY the main recipe, ignore ads, comments, and related recipes`;
 
   const response = await fetch('/api/claude', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
+      url,                          // proxy fetches this server-side
       model: 'claude-sonnet-4-20250514',
       max_tokens: 3000,
-      tools: [{ type: 'web_search_20250305', name: 'web_search' }],
       messages: [{ role: 'user', content: prompt }],
     }),
   });
