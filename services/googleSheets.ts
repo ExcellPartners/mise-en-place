@@ -1,4 +1,3 @@
-
 /**
  * Mise en Place - Google Sheets Relational Connector
  */
@@ -25,7 +24,16 @@ const safeGet = (row: any[], index: number, fallback: string = ''): string => {
 export async function fetchFullAppData(
   spreadsheetId: string | null,
   onProgress?: (tab: string, current: number, total: number) => void
-): Promise<{ recipes: Recipe[]; masters: MasterIngredient[]; storeMappings: StoreMapping[]; myItems: MyItem[]; pantry: PantryItem[]; collectionImages: Record<string, string>; mealPlans: MealPlan[] } | null> {
+): Promise<{
+  recipes: Recipe[];
+  recipeIds: string[];              // ← for duplicate-safe ID generation
+  masters: MasterIngredient[];
+  storeMappings: StoreMapping[];
+  myItems: MyItem[];
+  pantry: PantryItem[];
+  collectionImages: Record<string, string>;
+  mealPlans: MealPlan[];
+} | null> {
   const targetId = spreadsheetId || HARDCODED_SPREADSHEET_ID;
   try {
     const fetchTab = async (tabName: string) => {
@@ -76,18 +84,20 @@ export async function fetchFullAppData(
         category: safeGet(row, 1, 'Other'),
         details: safeGet(row, 14, '')
       });
+      // ColF=5=Monroe, ColG=6=Perinton, ColH=7=East
+      // Each cell contains "13A R4" — aisle + shelf together
       storeMappings.push({
         ingredientName: name,
         department: safeGet(row, 1, 'Other'),
         aisle: {
-          Monroe: safeGet(row, 5, 'N/A').split(' ')[0],
-          Perinton: safeGet(row, 6, 'N/A').split(' ')[0],
-          East: safeGet(row, 7, 'N/A').split(' ')[0]
+          Monroe: safeGet(row, 5, ''),
+          Perinton: safeGet(row, 6, ''),
+          East: safeGet(row, 7, '')
         },
         shelf: {
-          Monroe: safeGet(row, 5, '').split(' ')[1] || '',
-          Perinton: safeGet(row, 6, '').split(' ')[1] || '',
-          East: safeGet(row, 7, '').split(' ')[1] || ''
+          Monroe: '',
+          Perinton: '',
+          East: ''
         }
       });
     });
@@ -109,15 +119,11 @@ export async function fetchFullAppData(
       packages: parseFloat(safeGet(row, 2, '1')) || 1,
       buyAs: safeGet(row, 3, 'Unit'),
       aisle: {
-        Monroe: safeGet(row, 4, 'N/A').split(' ')[0],
-        Perinton: safeGet(row, 5, 'N/A').split(' ')[0],
-        East: safeGet(row, 6, 'N/A').split(' ')[0]
+        Monroe: safeGet(row, 4, ''),
+        Perinton: safeGet(row, 5, ''),
+        East: safeGet(row, 6, '')
       },
-      shelf: {
-        Monroe: safeGet(row, 4, '').split(' ')[1] || '',
-        Perinton: safeGet(row, 5, '').split(' ')[1] || '',
-        East: safeGet(row, 6, '').split(' ')[1] || ''
-      }
+      shelf: { Monroe: '', Perinton: '', East: '' }
     })).filter(i => i.name);
 
     const componentMap: Record<string, RecipeIngredient[]> = {};
@@ -137,7 +143,6 @@ export async function fetchFullAppData(
       if (!rId) return null;
       const rawInst = safeGet(row, 11);
       const isFav = safeGet(row, 13, 'FALSE').toUpperCase() === 'TRUE';
-
       return {
         id: rId,
         title: safeGet(row, 1, 'Untitled'),
@@ -159,6 +164,8 @@ export async function fetchFullAppData(
       };
     }).filter((r): r is Recipe => r !== null);
 
+    const recipeIds = recipes.map(r => r.id);
+
     const collectionImages: Record<string, string> = {};
     (collectionImageRows || []).forEach(row => {
       const name = safeGet(row, 0).trim();
@@ -166,28 +173,23 @@ export async function fetchFullAppData(
       if (name && url) collectionImages[name] = url;
     });
 
-    // ── Meal Logs: A=Date, B=MealType, C=RecipeId, D=Servings, E=Status ──────
-    // Only load Planned rows back into state — Cooked rows are history
+    // Meal Logs: A=Date, B=MealType, C=RecipeId, D=Servings, E=Status
     const mealPlans: MealPlan[] = (mealLogRows || [])
-      .map((row, idx) => {
+      .map((row) => {
         const date = safeGet(row, 0);
         const mealType = safeGet(row, 1) as MealPlan['mealType'];
         const recipeId = safeGet(row, 2);
         const servings = parseInt(safeGet(row, 3, '4')) || 4;
         const status = safeGet(row, 4, 'Planned');
         if (!date || !recipeId || status !== 'Planned') return null;
-        return { date, mealType, recipeId, servings, _sheetRowIdx: idx + 2 } as MealPlan & { _sheetRowIdx: number };
+        return { date, mealType, recipeId, servings } as MealPlan;
       })
-      .filter((p): p is MealPlan & { _sheetRowIdx: number } => p !== null);
+      .filter((p): p is MealPlan => p !== null);
 
-    return { recipes, masters, storeMappings, myItems, pantry, collectionImages, mealPlans };
+    return { recipes, recipeIds, masters, storeMappings, myItems, pantry, collectionImages, mealPlans };
   } catch (err) { return null; }
 }
 
-/**
- * Writes a single meal plan entry to Meal Logs tab with Status = "Planned"
- * A=Date, B=MealType, C=RecipeId, D=Servings, E=Status
- */
 export async function saveMealPlanToSheet(
   spreadsheetId: string,
   plan: MealPlan,
@@ -203,16 +205,9 @@ export async function saveMealPlanToSheet(
       body: JSON.stringify({ range: 'Meal Logs!A:E', majorDimension: 'ROWS', values: [row] }),
     });
     return true;
-  } catch (err) {
-    console.error('saveMealPlanToSheet failed:', err);
-    return false;
-  }
+  } catch (err) { return false; }
 }
 
-/**
- * Flips Status in col E from "Planned" → "Cooked" for a given RecipeId + Date.
- * Scans the sheet, finds the matching Planned row, updates it in place.
- */
 export async function markMealAsCooked(
   spreadsheetId: string,
   recipeId: string,
@@ -222,16 +217,11 @@ export async function markMealAsCooked(
   const targetId = spreadsheetId || HARDCODED_SPREADSHEET_ID;
   if (!accessToken || accessToken.startsWith('mock_')) return true;
   try {
-    const url = `${GOOGLE_SHEETS_API_BASE}/${targetId}/values/Meal Logs!A:E?key=${GOOGLE_API_KEY}`;
-    const res = await fetch(url);
+    const res = await fetch(`${GOOGLE_SHEETS_API_BASE}/${targetId}/values/Meal Logs!A:E?key=${GOOGLE_API_KEY}`);
     const data = await res.json();
     const rows: any[][] = data.values || [];
-
-    const rowIdx = rows.findIndex(r =>
-      r[0] === date && r[2] === recipeId && (r[4] || 'Planned') === 'Planned'
-    );
+    const rowIdx = rows.findIndex(r => r[0] === date && r[2] === recipeId && (r[4] || 'Planned') === 'Planned');
     if (rowIdx === -1) return false;
-
     const range = `Meal Logs!E${rowIdx + 1}`;
     await fetch(`${GOOGLE_SHEETS_API_BASE}/${targetId}/values/${range}?valueInputOption=USER_ENTERED&key=${GOOGLE_API_KEY}`, {
       method: 'PUT',
@@ -239,15 +229,9 @@ export async function markMealAsCooked(
       body: JSON.stringify({ range, majorDimension: 'ROWS', values: [['Cooked']] }),
     });
     return true;
-  } catch (err) {
-    console.error('markMealAsCooked failed:', err);
-    return false;
-  }
+  } catch (err) { return false; }
 }
 
-/**
- * Removes a Planned meal log row (when user removes from planner before cooking)
- */
 export async function removeMealPlanFromSheet(
   spreadsheetId: string,
   recipeId: string,
@@ -258,27 +242,18 @@ export async function removeMealPlanFromSheet(
   const targetId = spreadsheetId || HARDCODED_SPREADSHEET_ID;
   if (!accessToken || accessToken.startsWith('mock_')) return true;
   try {
-    const url = `${GOOGLE_SHEETS_API_BASE}/${targetId}/values/Meal Logs!A:E?key=${GOOGLE_API_KEY}`;
-    const res = await fetch(url);
+    const res = await fetch(`${GOOGLE_SHEETS_API_BASE}/${targetId}/values/Meal Logs!A:E?key=${GOOGLE_API_KEY}`);
     const data = await res.json();
     const rows: any[][] = data.values || [];
-
-    const rowIdx = rows.findIndex(r =>
-      r[0] === date && r[1] === mealType && r[2] === recipeId && (r[4] || 'Planned') === 'Planned'
-    );
-    if (rowIdx === -1) return true; // Already gone, no-op
-
-    // Clear the row (Sheets API doesn't have a delete-row endpoint without batchUpdate)
+    const rowIdx = rows.findIndex(r => r[0] === date && r[1] === mealType && r[2] === recipeId && (r[4] || 'Planned') === 'Planned');
+    if (rowIdx === -1) return true;
     const range = `Meal Logs!A${rowIdx + 1}:E${rowIdx + 1}`;
     await fetch(`${GOOGLE_SHEETS_API_BASE}/${targetId}/values/${range}:clear?key=${GOOGLE_API_KEY}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
     });
     return true;
-  } catch (err) {
-    console.error('removeMealPlanFromSheet failed:', err);
-    return false;
-  }
+  } catch (err) { return false; }
 }
 
 export async function saveRecipeToSheet(
@@ -291,50 +266,44 @@ export async function saveRecipeToSheet(
   if (!accessToken) return false;
 
   try {
-    // Sheet columns: A=ID, B=Title, C=Category, D=Serves, E=Prep, F=Cook,
-    // G=Difficulty, H=Score, I=Description, J=ChefTip, K=Instructions,
-    // L=Image, M=unused, N=Favorites, O=DateAdded, P=unused,
+    // A=ID, B=Title, C=Category, D=Serves, E=Prep, F=Cook, G=Difficulty,
+    // H=Score, I=Description, J=ChefTip, K=Instructions, L=Image,
+    // M=unused, N=Favorites, O=DateAdded, P=unused,
     // Q=SourceName, R=SourceAuthor, S=SourceURL
     const recipeRow = [
-      recipe.id,                        // A
-      recipe.title,                     // B
-      recipe.category,                  // C
-      recipe.baseServings,              // D
-      recipe.prepTime,                  // E
-      recipe.cookTime,                  // F
-      recipe.difficulty,                // G
-      recipe.score || 0,                // H
-      recipe.description,               // I
-      recipe.chefTip,                   // J
-      recipe.instructions.join('\n'),   // K
-      recipe.imageUrl || '',            // L
-      '',                               // M
-      'FALSE',                          // N — Favorites
-      new Date().toISOString(),         // O — DateAdded
-      '',                               // P — unused
-      recipe.sourceName || '',          // Q
-      recipe.sourceAuthor || '',        // R
-      recipe.sourceUrl || '',           // S
+      recipe.id,
+      recipe.title,
+      recipe.category,
+      recipe.baseServings,
+      recipe.prepTime,
+      recipe.cookTime,
+      recipe.difficulty,
+      0,
+      recipe.description,
+      recipe.chefTip,
+      recipe.instructions.join('\n'),
+      recipe.imageUrl || '',
+      '',
+      'FALSE',
+      new Date().toISOString(),
+      '',
+      recipe.sourceName || '',
+      recipe.sourceAuthor || '',
+      recipe.sourceUrl || '',
     ];
 
     await fetch(`${GOOGLE_SHEETS_API_BASE}/${targetId}/values/Recipes!A:S:append?valueInputOption=USER_ENTERED&key=${GOOGLE_API_KEY}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
-      body: JSON.stringify({ range: 'Recipes!A:S', majorDimension: 'ROWS', values: [recipeRow] }),
+      body: JSON.stringify({ range: 'Recipes!A:S', majorDimension: 'ROWS', values: [recipeRow] })
     });
 
-    const componentRows = recipe.ingredients.map(ing => [
-      recipe.id,
-      ing.name,
-      ing.amount,
-      ing.unit
-    ]);
-
+    const componentRows = recipe.ingredients.map(ing => [recipe.id, ing.name, ing.amount, ing.unit]);
     if (componentRows.length > 0) {
       await fetch(`${GOOGLE_SHEETS_API_BASE}/${targetId}/values/Components!A:D:append?valueInputOption=USER_ENTERED&key=${GOOGLE_API_KEY}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
-        body: JSON.stringify({ range: 'Components!A:D', majorDimension: 'ROWS', values: componentRows }),
+        body: JSON.stringify({ range: 'Components!A:D', majorDimension: 'ROWS', values: componentRows })
       });
     }
 
@@ -357,7 +326,7 @@ export async function saveRecipeToSheet(
       await fetch(`${GOOGLE_SHEETS_API_BASE}/${targetId}/values/Ingredients!A:O:append?valueInputOption=USER_ENTERED&key=${GOOGLE_API_KEY}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
-        body: JSON.stringify({ range: 'Ingredients!A:O', majorDimension: 'ROWS', values: newIngredients }),
+        body: JSON.stringify({ range: 'Ingredients!A:O', majorDimension: 'ROWS', values: newIngredients })
       });
     }
 
@@ -368,9 +337,6 @@ export async function saveRecipeToSheet(
   }
 }
 
-/**
- * Updates the 'Favorite' status (Column N) for a recipe
- */
 export async function updateRecipeFavoriteInSheet(
   spreadsheetId: string,
   recipeId: string,
@@ -379,13 +345,11 @@ export async function updateRecipeFavoriteInSheet(
 ): Promise<boolean> {
   const targetId = spreadsheetId || HARDCODED_SPREADSHEET_ID;
   if (!accessToken || accessToken.startsWith('mock_')) return true;
-
   try {
     const url = `${GOOGLE_SHEETS_API_BASE}/${targetId}/values/Recipes!A:A?key=${GOOGLE_API_KEY}`;
     const res = await fetch(url);
     const data = await res.json();
     const rows = data.values || [];
-
     const rowIdx = rows.findIndex((r: any[]) => r[0] === recipeId);
     if (rowIdx !== -1) {
       const range = `Recipes!N${rowIdx + 2}`;
@@ -397,15 +361,9 @@ export async function updateRecipeFavoriteInSheet(
       return true;
     }
     return false;
-  } catch (err) {
-    console.error("Fav Sync Error", err);
-    return false;
-  }
+  } catch (err) { return false; }
 }
 
-/**
- * Adds purchased items to pantry (Add Only)
- */
 export async function restockPantryFromShopping(
   spreadsheetId: string,
   items: ShoppingListItem[],
@@ -413,16 +371,15 @@ export async function restockPantryFromShopping(
 ): Promise<boolean> {
   const targetId = spreadsheetId || HARDCODED_SPREADSHEET_ID;
   if (!accessToken || accessToken.startsWith('mock_')) return true;
-
   try {
-    const pantryUrl = `${GOOGLE_SHEETS_API_BASE}/${targetId}/values/Pantry Stock!A:F?key=${GOOGLE_API_KEY}`;
-    const pantryRes = await fetch(pantryUrl);
+    const pantryRes = await fetch(`${GOOGLE_SHEETS_API_BASE}/${targetId}/values/Pantry Stock!A:F?key=${GOOGLE_API_KEY}`);
     const pantryData = await pantryRes.json();
     const rows = pantryData.values || [];
     const today = new Date().toLocaleDateString();
 
     for (const item of items) {
-      if (item.source !== 'recipe' && item.source !== 'myItem') continue;
+      // myItem and manual sources do NOT touch pantry stock
+      if (item.source !== 'recipe') continue;
 
       const rowIdx = rows.findIndex((r: any[]) => r[0]?.toLowerCase().trim() === item.name.toLowerCase().trim());
       const currentQty = rowIdx !== -1 ? parseFloat(rows[rowIdx][3]) || 0 : 0;
@@ -446,15 +403,9 @@ export async function restockPantryFromShopping(
       }
     }
     return true;
-  } catch (err) {
-    console.error('Restock Sync Error:', err);
-    return false;
-  }
+  } catch (err) { return false; }
 }
 
-/**
- * Subtracts consumed ingredients from pantry (Subtract Only)
- */
 export async function consumeIngredientsFromPantry(
   spreadsheetId: string,
   items: ShoppingListItem[],
@@ -462,22 +413,17 @@ export async function consumeIngredientsFromPantry(
 ): Promise<boolean> {
   const targetId = spreadsheetId || HARDCODED_SPREADSHEET_ID;
   if (!accessToken || accessToken.startsWith('mock_')) return true;
-
   try {
-    const pantryUrl = `${GOOGLE_SHEETS_API_BASE}/${targetId}/values/Pantry Stock!A:F?key=${GOOGLE_API_KEY}`;
-    const pantryRes = await fetch(pantryUrl);
+    const pantryRes = await fetch(`${GOOGLE_SHEETS_API_BASE}/${targetId}/values/Pantry Stock!A:F?key=${GOOGLE_API_KEY}`);
     const pantryData = await pantryRes.json();
     const rows = pantryData.values || [];
     const today = new Date().toLocaleDateString();
-
     for (const item of items) {
       if (item.source !== 'recipe') continue;
-
       const rowIdx = rows.findIndex((r: any[]) => r[0]?.toLowerCase().trim() === item.name.toLowerCase().trim());
       if (rowIdx !== -1) {
         const currentQty = parseFloat(rows[rowIdx][3]) || 0;
         const finalQty = Math.max(0, currentQty - item.totalQuantityNeeded);
-
         const updateRange = `Pantry Stock!D${rowIdx + 1}:F${rowIdx + 1}`;
         await fetch(`${GOOGLE_SHEETS_API_BASE}/${targetId}/values/${updateRange}?valueInputOption=USER_ENTERED&key=${GOOGLE_API_KEY}`, {
           method: 'PUT',
@@ -487,68 +433,44 @@ export async function consumeIngredientsFromPantry(
       }
     }
     return true;
-  } catch (err) {
-    console.error("Consumption Sync Error", err);
-    return false;
-  }
+  } catch (err) { return false; }
 }
 
-export async function addMasterToPantry(
-  spreadsheetId: string,
-  master: MasterIngredient,
-  accessToken: string | null
-): Promise<boolean> {
+export async function addMasterToPantry(spreadsheetId: string, master: MasterIngredient, accessToken: string | null): Promise<boolean> {
   const targetId = spreadsheetId || HARDCODED_SPREADSHEET_ID;
   if (!accessToken || accessToken.startsWith('mock_')) return true;
   try {
-    const checkUrl = `${GOOGLE_SHEETS_API_BASE}/${targetId}/values/Pantry Stock!A:A?key=${GOOGLE_API_KEY}`;
-    const checkRes = await fetch(checkUrl);
-    const checkData = await checkRes.json();
-    const rows = checkData.values || [];
+    const res = await fetch(`${GOOGLE_SHEETS_API_BASE}/${targetId}/values/Pantry Stock!A:A?key=${GOOGLE_API_KEY}`);
+    const data = await res.json();
+    const rows = data.values || [];
     const exists = rows.some((r: any[]) => r[0]?.toLowerCase() === master.name.toLowerCase());
     const today = new Date().toLocaleDateString();
-
     if (exists) {
       const rowIdx = rows.findIndex((r: any[]) => r[0]?.toLowerCase() === master.name.toLowerCase());
-      const updateRange = `Pantry Stock!B${rowIdx + 1}:C${rowIdx + 1}`;
-      await fetch(`${GOOGLE_SHEETS_API_BASE}/${targetId}/values/${updateRange}?valueInputOption=USER_ENTERED&key=${GOOGLE_API_KEY}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
-        body: JSON.stringify({ range: updateRange, majorDimension: 'ROWS', values: [['Yes', 'No']] })
+      await fetch(`${GOOGLE_SHEETS_API_BASE}/${targetId}/values/Pantry Stock!B${rowIdx + 1}:C${rowIdx + 1}?valueInputOption=USER_ENTERED&key=${GOOGLE_API_KEY}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
+        body: JSON.stringify({ range: `Pantry Stock!B${rowIdx + 1}:C${rowIdx + 1}`, majorDimension: 'ROWS', values: [['Yes', 'No']] })
       });
     } else {
-      const newRow = [master.name, 'Yes', 'No', master.unitsPerPurchase, master.recipeUnit, today];
       await fetch(`${GOOGLE_SHEETS_API_BASE}/${targetId}/values/Pantry Stock!A:F:append?valueInputOption=USER_ENTERED&key=${GOOGLE_API_KEY}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
-        body: JSON.stringify({ range: 'Pantry Stock!A:F', majorDimension: 'ROWS', values: [newRow] })
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
+        body: JSON.stringify({ range: 'Pantry Stock!A:F', majorDimension: 'ROWS', values: [[master.name, 'Yes', 'No', master.unitsPerPurchase, master.recipeUnit, today]] })
       });
     }
     return true;
-  } catch (err) {
-    return false;
-  }
+  } catch (err) { return false; }
 }
 
-export async function addNewMyItemToSheet(
-  spreadsheetId: string,
-  data: any,
-  accessToken: string | null
-): Promise<boolean> {
+export async function addNewMyItemToSheet(spreadsheetId: string, data: any, accessToken: string | null): Promise<boolean> {
   const targetId = spreadsheetId || HARDCODED_SPREADSHEET_ID;
   if (!accessToken || accessToken.startsWith('mock_')) return true;
   try {
-    const row = [data.name, data.category, data.packages, data.buyAs, data.monroe, data.perinton, data.east];
     await fetch(`${GOOGLE_SHEETS_API_BASE}/${targetId}/values/My Items!A:G:append?valueInputOption=USER_ENTERED&key=${GOOGLE_API_KEY}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
-      body: JSON.stringify({ range: 'My Items!A:G', majorDimension: 'ROWS', values: [row] })
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
+      body: JSON.stringify({ range: 'My Items!A:G', majorDimension: 'ROWS', values: [[data.name, data.category, data.packages, data.buyAs, data.monroe, data.perinton, data.east]] })
     });
     return true;
-  } catch (err) {
-    console.error("Save My Item Failed:", err);
-    return false;
-  }
+  } catch (err) { return false; }
 }
 
 export async function updateUserProfile(spreadsheetId: string, data: any, accessToken: string | null): Promise<boolean> { return true; }
