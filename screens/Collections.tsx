@@ -579,6 +579,9 @@ Rules:
   };
 
   const [produceCategories, setProduceCategories] = useState<Set<Category>>(new Set());
+  const [produceAIResults, setProduceAIResults] = useState<AIRecipeResult[]>([]);
+  const [produceAILoading, setProduceAILoading] = useState(false);
+  const [produceAISearched, setProduceAISearched] = useState(false);
   const toggleProduceCategory = (cat: Category) => {
     setProduceCategories(prev => {
       const next = new Set(prev);
@@ -833,7 +836,7 @@ Rules:
               </p>
               <div className="space-y-3">
                 {produceItems.map((item, idx) => (
-                  <button key={idx} onClick={() => setSelectedProduce(item)}
+                  <button key={idx} onClick={() => { setSelectedProduce(item); setProduceAIResults([]); setProduceAISearched(false); setProduceCategories(new Set()); }}
                     className="w-full flex items-center gap-4 p-4 bg-[#1c1d15] rounded-2xl border border-white/5 active:scale-[0.98] transition-transform text-left">
                     <div className="size-14 rounded-xl bg-[#636b2f]/10 border border-[#636b2f]/20 flex items-center justify-center text-3xl shrink-0">
                       {item.emoji}
@@ -925,10 +928,111 @@ Rules:
                   ))}
                 </div>
                 {produceRecipes.length === 0 ? (
-                  <div className="flex flex-col items-center py-12 text-center opacity-40">
-                    <span className="text-4xl mb-3">{selectedProduce.emoji}</span>
-                    <p className="font-bold text-sm mb-1">No recipes yet</p>
-                    <p className="text-xs leading-relaxed max-w-[200px]">Try scanning a recipe or importing one that features {selectedProduce.name.toLowerCase()}.</p>
+                  <div className="flex flex-col gap-4">
+                    {/* Empty state */}
+                    <div className="flex flex-col items-center py-8 text-center opacity-50">
+                      <span className="text-4xl mb-3">{selectedProduce.emoji}</span>
+                      <p className="font-bold text-sm mb-1">No recipes in your catalog yet</p>
+                      <p className="text-xs leading-relaxed max-w-[200px] text-[#b6baa1]">
+                        Let Claude find something delicious with {selectedProduce.name.toLowerCase()}.
+                      </p>
+                    </div>
+
+                    {/* AI discovery — only when zero catalog matches */}
+                    {!produceAISearched && !produceAILoading && (
+                      <div className="rounded-3xl bg-[#1c1d15] border border-[#636b2f]/20 p-5 text-center">
+                        <span className="text-3xl block mb-3">{selectedProduce.emoji}🌐</span>
+                        <h3 className="text-white font-black text-base mb-1">Find recipes with {selectedProduce.name}</h3>
+                        <p className="text-[#b6baa1] text-xs font-medium leading-relaxed mb-4">
+                          Claude will search the web for great {selectedProduce.name.toLowerCase()} recipes. Any you like can be added to your catalog.
+                        </p>
+                        <div className="flex flex-col gap-2">
+                          {(['Main', 'Side', 'Appetizer', 'Breakfast', 'Dessert'] as const).map(course => (
+                            <button
+                              key={course}
+                              onClick={async () => {
+                                setProduceAILoading(true);
+                                setProduceAISearched(true);
+                                try {
+                                  const query = `${course.toLowerCase()} recipe with ${selectedProduce.name.toLowerCase()}`;
+                                  const results = await searchRecipesWithAI(query);
+                                  setProduceAIResults(results.slice(0, 4));
+                                } catch {
+                                  setProduceAIResults([]);
+                                } finally {
+                                  setProduceAILoading(false);
+                                }
+                              }}
+                              className="w-full flex items-center justify-center gap-2 h-11 rounded-2xl bg-[#636b2f]/10 border border-[#636b2f]/20 text-[#636b2f] text-xs font-black uppercase tracking-widest active:scale-95 transition-transform"
+                            >
+                              <span className="material-symbols-outlined text-sm">travel_explore</span>
+                              {course} with {selectedProduce.name}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Loading */}
+                    {produceAILoading && (
+                      <div className="flex items-center gap-3 p-4 bg-[#1c1d15] rounded-2xl border border-white/5">
+                        <div className="size-8 rounded-full border-2 border-[#636b2f]/20 border-t-[#636b2f] animate-spin shrink-0" />
+                        <p className="text-[#b6baa1] text-xs font-medium">Claude is searching for {selectedProduce.name.toLowerCase()} recipes…</p>
+                      </div>
+                    )}
+
+                    {/* AI results */}
+                    {produceAISearched && !produceAILoading && produceAIResults.length > 0 && (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <p className="text-white font-black text-sm">{produceAIResults.length} ideas from the web</p>
+                          <button
+                            onClick={() => { setProduceAIResults([]); setProduceAISearched(false); }}
+                            className="text-white/30 text-[9px] font-black uppercase tracking-widest active:opacity-60"
+                          >
+                            Search again
+                          </button>
+                        </div>
+                        {produceAIResults.map((result, idx) => {
+                          const t = (result.prepTime || 0) + (result.cookTime || 0);
+                          return (
+                            <div key={idx} className="bg-[#1c1d15] rounded-2xl border border-[#636b2f]/20 p-4">
+                              <div className="flex items-start gap-2 mb-2">
+                                <div className="flex-1 min-w-0">
+                                  <span className="text-[#636b2f] text-[9px] font-black uppercase tracking-widest">{result.category} · {result.sourceName}</span>
+                                  <h4 className="text-white font-black text-sm leading-tight mt-0.5">{result.title}</h4>
+                                </div>
+                              </div>
+                              <p className="text-[#b6baa1] text-xs font-medium leading-relaxed mb-3 line-clamp-2">{result.description}</p>
+                              {t > 0 && (
+                                <div className="flex items-center gap-1 mb-3">
+                                  <span className="material-symbols-outlined text-[#636b2f] text-sm">schedule</span>
+                                  <span className="text-white/40 text-[9px] font-bold uppercase tracking-widest">{t}m · {result.difficulty}</span>
+                                </div>
+                              )}
+                              <button
+                                onClick={() => handleAddToCatalog(result)}
+                                className="w-full flex items-center justify-center gap-2 rounded-full h-10 bg-[#636b2f] text-white text-[10px] font-black uppercase tracking-widest active:scale-95 transition-transform"
+                              >
+                                <span className="material-symbols-outlined text-sm">add</span>
+                                Review & Add to Catalog
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* No AI results */}
+                    {produceAISearched && !produceAILoading && produceAIResults.length === 0 && (
+                      <div className="text-center py-8 opacity-40">
+                        <p className="font-bold text-sm mb-1">Nothing found</p>
+                        <button onClick={() => { setProduceAIResults([]); setProduceAISearched(false); }}
+                          className="text-[9px] font-black uppercase tracking-widest text-[#636b2f] mt-2">
+                          Try again
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-3">
