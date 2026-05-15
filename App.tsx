@@ -203,6 +203,7 @@ const App: React.FC = () => {
 
   const handleBack = () => {
     setNavDirection('back');
+    setScreenKey(k => k + 1);
     if (viewStack.length <= 1) setViewStack(['recipes']);
     else setViewStack(prev => prev.slice(0, -1));
   };
@@ -212,6 +213,7 @@ const App: React.FC = () => {
       recipesScrollRef.current = mainRef.current.scrollTop;
     }
     setNavDirection('forward');
+    setScreenKey(k => k + 1);
     setViewStack(prev => [...prev, view]);
   };
 
@@ -365,7 +367,9 @@ const App: React.FC = () => {
   const handleSaveRecipe = async (recipe: Recipe): Promise<void> => {
     // 1. Add immediately so it's searchable right away
     setRecipesList(prev => prev.find(r => r.id === recipe.id) ? prev : [...prev, recipe]);
-    // 2. Background sync after a short delay to let the Sheet write complete first
+    // 2. Clear pre-fill data so next manual entry starts blank
+    setScannedRecipeData(undefined);
+    // 3. Background sync after a short delay to let the Sheet write complete first
     setTimeout(() => triggerSync(), 2000);
   };
 
@@ -483,6 +487,10 @@ const App: React.FC = () => {
       accessToken={accessToken}
       masterIngredients={masterIngredients}
       onRecipeSaved={handleRecipeSavedFromSearch}
+      onAddToCatalog={(recipe) => {
+        setScannedRecipeData(recipe);
+        navigateTo('addRecipeManual');
+      }}
     />;
 
     if (currentView === 'planner') return <Planner
@@ -648,7 +656,18 @@ const App: React.FC = () => {
     >
       <Toast message={toastState.message} isVisible={toastState.visible} />
       {isLoading && <SplashScreen progress={loadingProgress} />}
-      <main ref={mainRef} className="flex-1 overflow-y-auto no-scrollbar pb-24">{renderView()}</main>
+      <main ref={mainRef} className="flex-1 overflow-y-auto no-scrollbar pb-24">
+        <div
+          key={screenKey}
+          className={`h-full w-full ${
+            navDirection === 'forward' ? 'animate-slide-in-forward' :
+            navDirection === 'back'    ? 'animate-slide-in-back'    :
+                                        'animate-slide-in-forward'
+          }`}
+        >
+          {renderView()}
+        </div>
+      </main>
 
       {viewStack[viewStack.length - 1] === 'recipeDetail' && selectedRecipe && (
         <div key={selectedRecipe.id} className="fixed inset-0 z-[200] overflow-y-auto no-scrollbar bg-background-dark">

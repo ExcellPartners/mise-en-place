@@ -16,6 +16,7 @@ interface CollectionsProps {
   accessToken?: string | null;
   masterIngredients?: any[];
   onRecipeSaved?: (recipe: Recipe) => void;
+  onAddToCatalog?: (recipe: Recipe) => void; // opens AddRecipeManual pre-filled
 }
 
 interface CollectionItem {
@@ -362,7 +363,7 @@ type TabId = 'collections' | 'quiz' | 'sources' | 'almostThere' | 'history';
 const Collections: React.FC<CollectionsProps> = ({
   recipes, onBack, onRecipeSelect, onPlannerOpen, recentCount,
   pantry = [], cookedHistory = [], collectionImages = {},
-  spreadsheetId, accessToken, masterIngredients = [], onRecipeSaved,
+  spreadsheetId, accessToken, masterIngredients = [], onRecipeSaved, onAddToCatalog,
 }) => {
   const [selectedTheme, setSelectedTheme] = useState<CollectionItem | null>(null);
   const [activeSection, setActiveSection] = useState<TabId>('collections');
@@ -388,6 +389,9 @@ const Collections: React.FC<CollectionsProps> = ({
   const [savingRecipeId, setSavingRecipeId] = useState<string | null>(null);
   const [savedRecipeIds, setSavedRecipeIds] = useState<Set<string>>(new Set());
   const [quizError, setQuizError] = useState('');
+  // Passive AI suggestions — auto-fetched alongside library results
+  const [passiveSuggestions, setPassiveSuggestions] = useState<AIRecipeResult[]>([]);
+  const [passiveLoading, setPassiveLoading] = useState(false);
 
   const resetQuiz = () => {
     setQuizPhase('steps');
@@ -412,9 +416,17 @@ const Collections: React.FC<CollectionsProps> = ({
       setCurrentStep(prev => prev + 1);
       setTimeout(() => mainRef.current?.scrollTo({ top: 0, behavior: 'smooth' }), 50);
     } else {
-      // Last step answered — show results
+      // Last step — show library results immediately
       setQuizPhase('results');
+      setPassiveSuggestions([]);
       setTimeout(() => mainRef.current?.scrollTo({ top: 0, behavior: 'smooth' }), 50);
+      // Silently fetch 2 AI suggestions in background
+      setPassiveLoading(true);
+      const query = buildSearchQuery(newAnswers);
+      searchRecipesWithAI(query)
+        .then(results => setPassiveSuggestions(results.slice(0, 2)))
+        .catch(() => {}) // fail silently — not critical
+        .finally(() => setPassiveLoading(false));
     }
   };
 
@@ -433,11 +445,11 @@ const Collections: React.FC<CollectionsProps> = ({
     setTimeout(() => mainRef.current?.scrollTo({ top: 0, behavior: 'smooth' }), 50);
   };
 
-  const handleAddToCatalog = async (result: AIRecipeResult) => {
-    const tempId = result.title.toLowerCase().replace(/\s+/g, '-') + '-' + Date.now();
-    setSavingRecipeId(tempId);
-
-    const newRecipe: Recipe = {
+  const handleAddToCatalog = (result: AIRecipeResult) => {
+    // Build a Recipe from the AI result and open AddRecipeManual pre-filled
+    // so the user can review/edit before committing to the Sheet
+    const tempId = `R-${Math.floor(10000 + Math.random() * 90000)}`;
+    const prefilledRecipe: Recipe = {
       id: tempId,
       title: result.title,
       description: result.description,
@@ -446,27 +458,18 @@ const Collections: React.FC<CollectionsProps> = ({
       prepTime: result.prepTime || 0,
       cookTime: result.cookTime || 0,
       baseServings: result.servings || 4,
-      chefTip: `Recipe discovered via Mise en Place. Source: ${result.sourceName}`,
-      ingredients: result.ingredients || [],
+      chefTip: `Discovered via Mise en Place AI. Source: ${result.sourceName}`,
+      ingredients: (result.ingredients || []).map(ing => ({
+        name: ing.name, amount: ing.amount, unit: ing.unit,
+      })),
       instructions: result.instructions || [],
-      imageUrl: result.imageUrl || '',
+      imageUrl: '',
       sourceName: result.sourceName || '',
       sourceUrl: result.url || '',
       isFavorite: false,
     };
-
-    try {
-      if (spreadsheetId && accessToken) {
-        const { saveRecipeToSheet } = await import('../services/googleSheets');
-        await saveRecipeToSheet(spreadsheetId, newRecipe, accessToken, masterIngredients);
-      }
-      onRecipeSaved?.(newRecipe);
-      setSavedRecipeIds(prev => new Set([...prev, tempId]));
-    } catch (err) {
-      console.error('Add to catalog failed:', err);
-    } finally {
-      setSavingRecipeId(null);
-    }
+    // Hand off to parent — App.tsx will set scannedRecipeData and navigate to addRecipeManual
+    onAddToCatalog?.(prefilledRecipe);
   };
 
   // ── Produce Professor ──────────────────────────────────────────────────────────
@@ -1145,20 +1148,66 @@ Rules:
                   </div>
                 )}
 
-                {/* AI search CTA */}
-                <div className="rounded-3xl bg-[#1c1d15] border border-white/5 p-6 text-center">
-                  <span className="text-4xl block mb-3">🌐</span>
-                  <h3 className="text-white font-black text-base mb-1">
-                    {localQuizResults.length > 0 ? 'Want more ideas?' : 'Search the web instead?'}
-                  </h3>
-                  <p className="text-[#b6baa1] text-xs font-medium leading-relaxed mb-5">
-                    Claude will search the web for recipes matching your picks. Any you like can be added directly to your catalog.
-                  </p>
-                  <button onClick={handleAISearch}
-                    className="flex items-center justify-center gap-3 w-full rounded-full h-14 bg-[#636b2f] text-white text-sm font-black uppercase tracking-widest active:scale-95 transition-transform shadow-lg shadow-[#636b2f]/30">
-                    <span className="material-symbols-outlined text-xl">travel_explore</span>
-                    Search the Web
-                  </button>
+                {/* Passive AI suggestions — always shown */}
+                <div className="mt-6">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <h3 className="text-white font-black text-base">Discover More</h3>
+                      <p className="text-[#636b2f] text-[9px] font-black uppercase tracking-widest mt-0.5">From the web · Claude's picks</p>
+                    </div>
+                    <button onClick={handleAISearch}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#3b3e2e] text-[#636b2f] text-[9px] font-black uppercase tracking-widest active:scale-95 transition-transform">
+                      <span className="material-symbols-outlined text-sm">travel_explore</span>
+                      More
+                    </button>
+                  </div>
+
+                  {passiveLoading && (
+                    <div className="flex items-center gap-3 p-4 bg-[#1c1d15] rounded-2xl border border-white/5">
+                      <div className="size-8 rounded-full border-2 border-[#636b2f]/20 border-t-[#636b2f] animate-spin shrink-0" />
+                      <p className="text-[#b6baa1] text-xs font-medium">Claude is finding ideas from the web…</p>
+                    </div>
+                  )}
+
+                  {!passiveLoading && passiveSuggestions.length > 0 && (
+                    <div className="space-y-3">
+                      {passiveSuggestions.map((result, idx) => {
+                        const t = (result.prepTime || 0) + (result.cookTime || 0);
+                        return (
+                          <div key={idx} className="bg-[#1c1d15] rounded-2xl border border-[#636b2f]/20 overflow-hidden">
+                            <div className="p-4">
+                              <div className="flex items-start gap-3 mb-2">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <span className="text-[#636b2f] text-[9px] font-black uppercase tracking-widest">{result.category}</span>
+                                    <span className="text-white/20 text-[9px]">·</span>
+                                    <span className="text-white/30 text-[9px] font-bold">{result.sourceName}</span>
+                                  </div>
+                                  <h4 className="text-white font-black text-sm leading-tight">{result.title}</h4>
+                                </div>
+                                <div className="px-2 py-1 rounded-full bg-[#636b2f]/10 border border-[#636b2f]/20 shrink-0">
+                                  <span className="text-[#636b2f] text-[8px] font-black uppercase tracking-widest">AI Pick</span>
+                                </div>
+                              </div>
+                              <p className="text-[#b6baa1] text-xs font-medium leading-relaxed mb-3 line-clamp-2">{result.description}</p>
+                              {t > 0 && (
+                                <div className="flex items-center gap-1 mb-3">
+                                  <span className="material-symbols-outlined text-[#636b2f] text-sm">schedule</span>
+                                  <span className="text-white/40 text-[9px] font-bold uppercase tracking-widest">{t}m · {result.difficulty}</span>
+                                </div>
+                              )}
+                              <button
+                                onClick={() => handleAddToCatalog(result)}
+                                className="w-full flex items-center justify-center gap-2 rounded-full h-10 bg-[#636b2f] text-white text-[10px] font-black uppercase tracking-widest active:scale-95 transition-transform">
+                                <span className="material-symbols-outlined text-sm">add</span>
+                                Review & Add to Catalog
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -1260,7 +1309,7 @@ Rules:
                                 ? <><span className="material-symbols-outlined text-sm animate-spin">sync</span>Saving…</>
                                 : isSaved
                                   ? <><span className="material-symbols-outlined text-sm">check</span>Added</>
-                                  : <><span className="material-symbols-outlined text-sm">add</span>Add to Catalog</>
+                                  : <><span className="material-symbols-outlined text-sm">add</span>Review & Add to Catalog</>
                               }
                             </button>
                             {result.url && (
