@@ -1,0 +1,59 @@
+{
+  "packageId": "com.excellpartners.miseenplace",
+  "host": "mise-en-place-nine.vercel.app",
+  "name": "Mise en Place",
+  "launcherName": "Mise en Plac",
+  "display": "standalone",
+  "themeColor": "#636B2F",
+  "themeColorDark": "#000000",
+  "navigationColor": "#000000",
+  "navigationColorDark": "#000000",
+  "navigationDividerColor": "#000000",
+  "navigationDividerColorDark": "#000000",
+  "backgroundColor": "#0F110C",
+  "enableNotifications": true,
+  "startUrl": "/",
+  "iconUrl": "https://mise-en-place-nine.vercel.app/icons/android/launchericon-512x512.png",
+  "maskableIconUrl": "https://mise-en-place-nine.vercel.app/icons/android/launchericon-512x512.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "C:\\Users\\maddi\\OneDrive\\Desktop\\mise-en-place\\android.keystore",
+    "alias": "my-key-alias"
+  },
+  "appVersionName": "1",
+  "appVersionCode": 1,
+  "shortcuts": [],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://mise-en-place-nine.vercel.app/manifest.json",
+  "fallbackType": "customtabs",
+  "features": {},
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "fullScopeUrl": "https://mise-en-place-nine.vercel.app/",
+  "minSdkVersion": 21,
+  "shareTarget": {
+    "action": "https://mise-en-place-nine.vercel.app/share-target",
+    "method": "GET",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  },
+  "orientation": "portrait",
+  "fingerprints": [],
+  "additionalTrustedOrigins": [],
+  "retainedBundles": [],
+  "protocolHandlers": [],
+  "fileHandlers": [],
+  "launchHandlerClientMode": "",
+  "displayOverride": [
+    "window-controls-overlay",
+    "standalone"
+  ],
+  "appVersion": "1"
+}

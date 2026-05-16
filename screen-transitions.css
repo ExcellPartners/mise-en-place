@@ -25,3 +25,27 @@
 .animate-slide-in-back {
   animation: slideInBack 0.32s cubic-bezier(0.34, 1.2, 0.64, 1) both;
 }
+
+/* ── Android TWA scroll & gesture fixes ────────────────────────────────────────
+   overscroll-behavior: contain stops Android from treating overscroll as a
+   window dismiss gesture. Without this, scrolling to the bottom of a page
+   can trigger the TWA "pull to close" behavior.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+html, body {
+  overscroll-behavior: contain;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Prevent horizontal scroll from triggering browser back navigation */
+body {
+  overflow-x: hidden;
+  touch-action: pan-y;
+}
+
+/* Larger touch targets on mobile for all interactive elements */
+button, [role="button"] {
+  min-height: 44px;
+  min-width: 44px;
+}

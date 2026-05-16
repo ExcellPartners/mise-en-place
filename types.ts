@@ -16,6 +16,7 @@ export interface Recipe {
   imageUrl: string;
   score?: number;
   isFavorite?: boolean;
+  isCompleteMeal?: boolean;
   dateAdded?: string;
   sourceType?: 'cookbook' | 'website' | null;
   sourceName?: string;
@@ -79,7 +80,7 @@ export interface EssentialItem {
 
 export interface MealPlan {
   date: string;
-  mealType: 'Breakfast' | 'Lunch' | 'Dinner' | 'Dessert' | 'Drink' | 'Snack'; 
+  mealType: 'Breakfast' | 'Lunch' | 'Dinner' | 'Dessert' | 'Beverage' | 'Snack';
   recipeId: string;
   servings: number;
 }

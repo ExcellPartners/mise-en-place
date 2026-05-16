@@ -12,6 +12,27 @@ interface AddRecipeManualProps {
 
 const VALID_UNITS = ['tsp', 'tsps', 'tbsp', 'tbsps', 'lb', 'lbs', 'cup', 'cups', 'oz', 'g', 'kg', 'ml', 'l', 'pinch', 'clove', 'cloves', 'unit', 'units', 'slice', 'slices', 'bag', 'bags', 'pack', 'packs', 'can', 'cans'];
 
+const PROTEIN_MAP: [string, string[]][] = [
+  ['Beef',    ['beef', 'steak', 'chuck', 'brisket', 'ribeye', 'sirloin', 'ground beef', 'short rib']],
+  ['Chicken', ['chicken', 'hen', 'wing', 'thigh', 'breast', 'drumstick']],
+  ['Pork',    ['pork', 'bacon', 'ham', 'sausage', 'prosciutto', 'pancetta', 'chorizo', 'loin', 'ribs']],
+  ['Seafood', ['fish', 'shrimp', 'salmon', 'tuna', 'cod', 'halibut', 'scallop', 'crab', 'lobster', 'clam', 'mussel', 'tilapia', 'anchovy']],
+  ['Turkey',  ['turkey', 'ground turkey']],
+  ['Lamb',    ['lamb', 'mutton']],
+  ['Eggs',    ['egg', 'eggs']],
+  ['Tofu',    ['tofu', 'tempeh']],
+  ['Pasta',   ['pasta', 'spaghetti', 'penne', 'fettuccine', 'rigatoni', 'linguine', 'noodle', 'orzo']],
+  ['Rice',    ['rice', 'risotto', 'pilaf']],
+  ['Beans',   ['bean', 'lentil', 'chickpea', 'dal']],
+];
+const detectProtein = (ingredients: { name: string }[]): string => {
+  const text = ingredients.map(i => i.name).join(' ').toLowerCase();
+  for (const [label, keywords] of PROTEIN_MAP) {
+    if (keywords.some(kw => text.includes(kw))) return label;
+  }
+  return '';
+};
+
 const DESCRIPTOR_TERMS = ['minced', 'chopped', 'diced', 'sliced', 'halved', 'melted', 'crushed', 'grated', 'shredded', 'peeled', 'trimmed', 'softened', 'beaten', 'sifted', 'packed', 'heaping', 'roughly', 'finely', 'coarsely', 'thinly', 'freshly', 'ground', 'toasted', 'cooked', 'frozen', 'thawed', 'drained', 'rinsed', 'room temperature'];
 
 const toTitleCase = (str: string) =>
@@ -364,14 +385,14 @@ const AddRecipeManual: React.FC<AddRecipeManualProps> = ({
         recipe.prepTime,                                // F - Prep (Minutes)
         recipe.cookTime,                                // G - Cook (Minutes)
         recipe.difficulty,                              // H - Difficulty
-        0,                                              // I - Score
+        '',                                             // I - Score (Sheet formula)
         truncate(recipe.description, 2000),             // J - Description
         truncate(recipe.chefTip, 1000),                 // K - Chef's Tip
         truncate(recipe.instructions.join('\n'), 40000), // L - Instructions
         '',                                             // M - Picture (add later)
         'FALSE',                                        // N - Favorites
-        'FALSE',                                        // O - Complete Meal
-        '',                                             // P - Protein
+        'FALSE',                                        // O - Complete Meal (always false on create)
+        detectProtein(recipe.ingredients),              // P - Protein (auto-detected)
         truncate(recipe.sourceName || '', 200),         // Q - SourceName
         truncate(recipe.sourceAuthor || '', 200),       // R - SourceAuthor
         truncate(recipe.sourceUrl || '', 500),          // S - SourceURL

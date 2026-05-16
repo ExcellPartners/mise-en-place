@@ -14,8 +14,10 @@ interface RecipeDetailProps {
   onDelete?: (id: string) => void;
   isPinned: boolean;
   isLiked: boolean;
+  isCompleteMeal?: boolean;
   onTogglePin: () => void;
   onToggleLike: () => void;
+  onToggleCompleteMeal?: () => void;
 }
 
 const RecipeDetail: React.FC<RecipeDetailProps> = ({ 
@@ -28,8 +30,10 @@ const RecipeDetail: React.FC<RecipeDetailProps> = ({
   onDelete,
   isPinned,
   isLiked,
+  isCompleteMeal,
   onTogglePin,
-  onToggleLike
+  onToggleLike,
+  onToggleCompleteMeal,
 }) => {
   const [servings, setServings] = useState(recipe.baseServings);
   const [activeTab, setActiveTab] = useState<'ingredients' | 'instructions'>('ingredients');
@@ -101,6 +105,21 @@ const RecipeDetail: React.FC<RecipeDetailProps> = ({
             }`}
           >
             <span className="material-symbols-outlined">push_pin</span>
+          </button>
+
+          {/* Complete Meal toggle - Col O */}
+          <button
+            onClick={onToggleCompleteMeal}
+            title={isCompleteMeal ? 'Complete meal — tap to unmark' : 'Mark as complete meal'}
+            className={`size-10 flex items-center justify-center rounded-full backdrop-blur-xl border active:scale-95 transition-all ${
+              isCompleteMeal
+                ? 'bg-emerald-500 border-emerald-500 text-white shadow-lg'
+                : 'bg-black/40 border-white/10 text-white'
+            }`}
+          >
+            <span className="material-symbols-outlined text-lg" style={{ fontVariationSettings: isCompleteMeal ? "'FILL' 1" : "'FILL' 0" }}>
+              dining
+            </span>
           </button>
           
           <button 

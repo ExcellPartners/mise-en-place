@@ -140,11 +140,12 @@ export async function fetchFullAppData(
         description: safeGet(row, 9), chefTip: safeGet(row, 10), imageUrl: safeGet(row, 12),
         ingredients: componentMap[rId] || [],
         instructions: rawInst.includes('\n') ? rawInst.split('\n').filter((s: string) => s.trim()) : [rawInst],
-        isFavorite: safeGet(row, 13, 'FALSE').toUpperCase() === 'TRUE', // N
-        dateAdded: safeGet(row, 14, new Date().toISOString()),
-        sourceName: safeGet(row, 16) || undefined,  // Q
-        sourceAuthor: safeGet(row, 17) || undefined, // R
-        sourceUrl: safeGet(row, 18) || undefined,   // S
+        isFavorite: safeGet(row, 13, 'FALSE').toUpperCase() === 'TRUE',      // N - Favorites
+        isCompleteMeal: safeGet(row, 14, 'FALSE').toUpperCase() === 'TRUE',  // O - Complete Meal
+        dateAdded: new Date().toISOString(),
+        sourceName: safeGet(row, 16) || undefined,   // Q - SourceName
+        sourceAuthor: safeGet(row, 17) || undefined, // R - SourceAuthor
+        sourceUrl: safeGet(row, 18) || undefined,    // S - SourceURL
       };
     }).filter(Boolean) as Recipe[];
 
@@ -168,6 +169,28 @@ export async function fetchFullAppData(
   } catch (err) { console.error('fetchFullAppData failed:', err); return null; }
 }
 
+// ── Protein auto-detection ────────────────────────────────────────────────────
+function detectProtein(ingredients: { name: string }[]): string {
+  const text = ingredients.map(i => i.name).join(' ').toLowerCase();
+  const proteins: [string, string[]][] = [
+    ['Beef',     ['beef', 'steak', 'chuck', 'brisket', 'ribeye', 'sirloin', 'ground beef', 'short rib']],
+    ['Chicken',  ['chicken', 'hen', 'wing', 'thigh', 'breast', 'drumstick']],
+    ['Pork',     ['pork', 'bacon', 'ham', 'sausage', 'prosciutto', 'pancetta', 'chorizo', 'loin', 'ribs']],
+    ['Seafood',  ['fish', 'shrimp', 'salmon', 'tuna', 'cod', 'halibut', 'scallop', 'crab', 'lobster', 'clam', 'mussel', 'tilapia', 'sea bass', 'mahi', 'anchovy']],
+    ['Turkey',   ['turkey', 'ground turkey']],
+    ['Lamb',     ['lamb', 'mutton', 'rack of lamb']],
+    ['Eggs',     ['egg', 'eggs']],
+    ['Tofu',     ['tofu', 'tempeh']],
+    ['Pasta',    ['pasta', 'spaghetti', 'penne', 'fettuccine', 'rigatoni', 'linguine', 'noodle', 'orzo']],
+    ['Rice',     ['rice', 'risotto', 'pilaf', 'fried rice']],
+    ['Beans',    ['bean', 'lentil', 'chickpea', 'legume', 'dal']],
+  ];
+  for (const [label, keywords] of proteins) {
+    if (keywords.some(kw => text.includes(kw))) return label;
+  }
+  return '';
+}
+
 // ── Recipe save ────────────────────────────────────────────────────────────────
 export async function saveRecipeToSheet(
   _spreadsheetId: string,
@@ -186,14 +209,14 @@ export async function saveRecipeToSheet(
       recipe.prepTime,                                  // F - Prep (Minutes)
       recipe.cookTime,                                  // G - Cook (Minutes)
       recipe.difficulty,                                // H - Difficulty
-      0,                                                // I - Score
+      '',                                               // I - Score (Sheet formula)
       tr(recipe.description, 2000),                     // J - Description
       tr(recipe.chefTip, 1000),                         // K - Chef's Tip
       tr(recipe.instructions.join('\n'), 40000),       // L - Instructions
       tr(recipe.imageUrl, 500),                         // M - Picture
       'FALSE',                                          // N - Favorites
-      'FALSE',                                          // O - Complete Meal
-      '',                                               // P - Protein
+      recipe.isCompleteMeal ? 'TRUE' : 'FALSE',         // O - Complete Meal
+      detectProtein(recipe.ingredients),                // P - Protein (auto-detected)
       tr(recipe.sourceName, 200),                       // Q - SourceName
       tr(recipe.sourceAuthor, 200),                     // R - SourceAuthor
       tr(recipe.sourceUrl, 500),                        // S - SourceURL

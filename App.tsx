@@ -224,20 +224,45 @@ const App: React.FC = () => {
     setViewStack([view]);
   };
 
+  // ── Android hardware back button / edge swipe gesture ────────────────────────
+  useEffect(() => {
+    // Push a history entry so Android back button/gesture has something to pop
+    window.history.pushState({ idx: viewStack.length }, '');
+
+    const handlePopState = (e: PopStateEvent) => {
+      // Android back button fired — treat as handleBack
+      if (viewStack.length > 1) {
+        handleBack();
+        // Push another entry so back stays available
+        window.history.pushState({ idx: viewStack.length - 1 }, '');
+      } else {
+        // At root — let Android minimize the app naturally
+        window.history.pushState({ idx: 0 }, '');
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [viewStack.length]);
+
   const onTouchStart = (e: React.TouchEvent) => {
     setTouchEnd(null);
     setTouchStart(e.targetTouches[0].clientX);
     setTouchStartY(e.targetTouches[0].clientY);
   };
 
-  const onTouchMove = (e: React.TouchEvent) => setTouchEnd(e.targetTouches[0].clientX);
+  const onTouchMove = (e: React.TouchEvent) => {
+    setTouchEnd(e.targetTouches[0].clientX);
+  };
 
   const onTouchEnd = (e: React.TouchEvent) => {
     if (!touchStart || !touchEnd || !touchStartY) return;
-    const horizontalDistance = touchStart - touchEnd;
+    const horizontalDistance = touchEnd - touchStart; // positive = right swipe
     const verticalDistance = Math.abs(e.changedTouches[0].clientY - touchStartY);
-    const isRightSwipe = horizontalDistance < -80 && verticalDistance < 40;
-    if (isRightSwipe && viewStack.length > 1) handleBack();
+    const startedNearLeftEdge = touchStart < 40; // within 40px of left edge
+    const isHorizontallyDominant = horizontalDistance > Math.abs(verticalDistance) * 1.5;
+    const isEdgeSwipeBack = startedNearLeftEdge && horizontalDistance > 60 && isHorizontallyDominant;
+    if (isEdgeSwipeBack && viewStack.length > 1) handleBack();
   };
 
   const showToast = (msg: string) => {
@@ -270,6 +295,40 @@ const App: React.FC = () => {
     showToast(newStatus ? 'Added to Favorites' : 'Removed from Favorites');
     if (spreadsheetId) {
       await updateRecipeFavoriteInSheet(spreadsheetId, id, newStatus, accessToken);
+    }
+  };
+
+  const handleToggleCompleteMeal = async (id: string) => {
+    const recipe = recipesList.find(r => r.id === id);
+    const newStatus = !recipe?.isCompleteMeal;
+    setRecipesList(prev => prev.map(r => r.id === id ? { ...r, isCompleteMeal: newStatus } : r));
+    if (selectedRecipe?.id === id) setSelectedRecipe(prev => prev ? { ...prev, isCompleteMeal: newStatus } : null);
+    showToast(newStatus ? 'Marked as Complete Meal' : 'Unmarked as Complete Meal');
+    // Write to Sheet col O via service account proxy
+    if (spreadsheetId) {
+      try {
+        const API_BASE = 'https://sheets.googleapis.com/v4/spreadsheets';
+        const KEY = 'AIzaSyDFc2raCSZfnfyM5n1fwrsbUco1njqHHMk';
+        const res = await fetch(`${API_BASE}/${spreadsheetId}/values/Recipes!A:A?key=${KEY}`);
+        const data = await res.json();
+        const rows = data.values || [];
+        const rowIdx = rows.findIndex((r: string[]) => r[0] === id);
+        if (rowIdx !== -1) {
+          const range = `Recipes!O${rowIdx + 1}`;
+          await fetch('/api/claude', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'sheetWrite',
+              sheetWrite: {
+                method: 'PUT',
+                url: `${API_BASE}/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED&key=${KEY}`,
+                body: { range, majorDimension: 'ROWS', values: [[newStatus ? 'TRUE' : 'FALSE']] },
+              },
+            }),
+          });
+        }
+      } catch (err) { console.error('Complete meal update failed:', err); }
     }
   };
 
@@ -650,6 +709,7 @@ const App: React.FC = () => {
   return (
     <div
       className="min-h-screen bg-[#000000] text-gray-200 flex flex-col overflow-hidden"
+      style={{ touchAction: 'pan-y' }}
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={(e) => onTouchEnd(e)}
@@ -678,6 +738,8 @@ const App: React.FC = () => {
             isLiked={!!selectedRecipe.isFavorite}
             onTogglePin={() => handleTogglePin(selectedRecipe.id)}
             onToggleLike={() => handleToggleLike(selectedRecipe.id)}
+            isCompleteMeal={!!selectedRecipe.isCompleteMeal}
+            onToggleCompleteMeal={() => handleToggleCompleteMeal(selectedRecipe.id)}
             onBack={handleBack}
             onCook={() => navigateTo('cookingMode')}
             onAddToPlanner={() => { handleTogglePin(selectedRecipe.id); }}

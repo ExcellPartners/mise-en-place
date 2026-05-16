@@ -196,11 +196,22 @@ unit: tsp|tbsp|cup|oz|lb|g|kg|ml|l|pinch|clove|unit|slice|can|bag|pack` });
     }
   };
 
-  const handleCapture = () => {
-    if (!videoRef.current) return;
+  const captureFrame = (): string | null => {
+    if (!videoRef.current) return null;
     const vw = videoRef.current.videoWidth;
     const vh = videoRef.current.videoHeight;
-    if (vw === 0 || vh === 0) {
+    if (vw === 0 || vh === 0) return null;
+    const canvas = document.createElement('canvas');
+    canvas.width = vw; canvas.height = vh;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    ctx.drawImage(videoRef.current, 0, 0);
+    return canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
+  };
+
+  const handleCapture = () => {
+    const base64 = captureFrame();
+    if (!base64) {
       setErrorText('Camera still loading — try again in a moment.');
       return;
     }
@@ -208,21 +219,25 @@ unit: tsp|tbsp|cup|oz|lb|g|kg|ml|l|pinch|clove|unit|slice|can|bag|pack` });
     setIsShutterFlash(true);
     setTimeout(() => setIsShutterFlash(false), 120);
 
-    const canvas = document.createElement('canvas');
-    canvas.width = vw; canvas.height = vh;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.drawImage(videoRef.current, 0, 0);
-
-    const base64 = canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
-    const previewUrl = canvas.toDataURL('image/jpeg', 0.4);
-
-    if (showStack) {
-      setStagedImages(prev => [...prev, base64]);
-      setStatusText(`${stagedImages.length + 1} pages — add more or Process All`);
+    if (stagedImages.length === 0 && !showStack) {
+      // First capture — show choice: process now or add more pages
+      setStagedImages([base64]);
+      setShowStack(true);
+      setStatusText('Page 1 captured — add more pages or tap Process');
     } else {
-      processImages([base64], previewUrl);
+      // Already in multi-page mode — add to stack
+      setStagedImages(prev => [...prev, base64]);
+      setStatusText(`${stagedImages.length + 1} pages captured — add more or tap Process`);
     }
+  };
+
+  const handleProcessSingle = () => {
+    // Process just the first staged image immediately
+    if (stagedImages.length === 0) return;
+    const preview = '';
+    processImages([stagedImages[0]], preview);
+    setStagedImages([]);
+    setShowStack(false);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -301,22 +316,47 @@ unit: tsp|tbsp|cup|oz|lb|g|kg|ml|l|pinch|clove|unit|slice|can|bag|pack` });
         </div>
       )}
 
-      {/* Multi-page stack banner */}
+      {/* Multi-page stack banner — explicit buttons */}
       {showStack && stagedImages.length > 0 && (
-        <div className="absolute top-[72px] left-4 right-4 z-50 p-3 rounded-2xl bg-[#636b2f]/90 border border-[#636b2f]/50 flex items-center gap-3 backdrop-blur-md">
-          <span className="material-symbols-outlined text-white text-xl">layers</span>
-          <div className="flex-1">
-            <p className="text-white text-xs font-bold">{stagedImages.length} page{stagedImages.length !== 1 ? 's' : ''} staged</p>
-            <p className="text-white/70 text-[10px]">Tap shutter to add more, or Process All</p>
+        <div className="absolute top-[72px] left-4 right-4 z-50 p-4 rounded-2xl bg-[#1c1d15]/95 border border-[#636b2f]/40 backdrop-blur-md">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="material-symbols-outlined text-[#636b2f] text-xl">layers</span>
+            <p className="text-white text-xs font-bold flex-1">
+              {stagedImages.length} page{stagedImages.length !== 1 ? 's' : ''} captured
+            </p>
+            <button onClick={() => { setStagedImages([]); setShowStack(false); setStatusText('Align page in frame — tap shutter'); }}
+              className="text-white/30 active:scale-90 shrink-0">
+              <span className="material-symbols-outlined text-lg">close</span>
+            </button>
           </div>
-          <button onClick={() => processImages(stagedImages, '')} disabled={isScanning}
-            className="px-3 py-1.5 rounded-xl bg-white text-[#636b2f] text-[10px] font-black uppercase tracking-widest active:scale-95 shrink-0">
-            Process All
-          </button>
-          <button onClick={() => { setStagedImages([]); setShowStack(false); setStatusText('Align page in frame — tap shutter'); }}
-            className="text-white/50 active:scale-90 shrink-0">
-            <span className="material-symbols-outlined text-lg">close</span>
-          </button>
+          <div className="flex gap-2">
+            {stagedImages.length === 1 && (
+              <button
+                onClick={handleProcessSingle}
+                disabled={isScanning}
+                className="flex-1 h-11 rounded-xl bg-white/10 border border-white/20 text-white text-[10px] font-black uppercase tracking-widest active:scale-95 transition-transform flex items-center justify-center gap-1.5"
+              >
+                <span className="material-symbols-outlined text-sm">auto_awesome</span>
+                Process Page
+              </button>
+            )}
+            <button
+              onClick={handleCapture}
+              disabled={isScanning}
+              className="flex-1 h-11 rounded-xl bg-[#636b2f]/20 border border-[#636b2f]/40 text-[#636b2f] text-[10px] font-black uppercase tracking-widest active:scale-95 transition-transform flex items-center justify-center gap-1.5"
+            >
+              <span className="material-symbols-outlined text-sm">add_a_photo</span>
+              + Add Page
+            </button>
+            <button
+              onClick={() => processImages(stagedImages, '')}
+              disabled={isScanning}
+              className="flex-1 h-11 rounded-xl bg-[#636b2f] text-white text-[10px] font-black uppercase tracking-widest active:scale-95 transition-transform flex items-center justify-center gap-1.5"
+            >
+              <span className="material-symbols-outlined text-sm">done_all</span>
+              Process All
+            </button>
+          </div>
         </div>
       )}
 
@@ -406,7 +446,7 @@ unit: tsp|tbsp|cup|oz|lb|g|kg|ml|l|pinch|clove|unit|slice|can|bag|pack` });
               className={`material-symbols-outlined text-white text-4xl ${isScanning ? 'animate-spin' : ''}`}
               style={{ fontVariationSettings: "'FILL' 1" }}
             >
-              {isScanning ? 'sync' : showStack && stagedImages.length > 0 ? 'add_a_photo' : 'photo_camera'}
+              {isScanning ? 'sync' : 'photo_camera'}
             </span>
           </button>
 
