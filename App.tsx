@@ -838,6 +838,7 @@ const App: React.FC = () => {
           onScan={() => { setIsAddOverlayOpen(false); navigateTo('scanRecipe'); }}
           onAddIngredient={() => { setIsAddOverlayOpen(false); navigateTo('addIngredient'); }}
           onAddMyItem={() => { setIsAddOverlayOpen(false); navigateTo('addMyItem'); }}
+          onLibrary={() => { setIsAddOverlayOpen(false); navigateTo('cookbookLibrary'); }}
         />
       )}
     </div>
