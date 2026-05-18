@@ -45,8 +45,9 @@ import AddIngredient from './screens/AddIngredient';
 import AddMyItem from './screens/AddMyItem';
 import AddNewMyItemEntry from './screens/AddNewMyItemEntry';
 import Collections from './screens/Collections';
+import CookbookLibrary from './screens/CookbookLibrary';
 
-type View = 'recipes' | 'planner' | 'shopping' | 'pantry' | 'addPantryItem' | 'recipeDetail' | 'cookingMode' | 'settings' | 'config' | 'addRecipeManual' | 'scanRecipe' | 'fieldMapping' | 'profile' | 'storeManagement' | 'accountSettings' | 'editProfile' | 'helpSupport' | 'changeAccount' | 'login' | 'onboarding' | 'addIngredient' | 'addMyItem' | 'addNewMyItemEntry' | 'syncHistory' | 'backupRestore' | 'collections';
+type View = 'recipes' | 'planner' | 'shopping' | 'pantry' | 'addPantryItem' | 'recipeDetail' | 'cookingMode' | 'settings' | 'config' | 'addRecipeManual' | 'scanRecipe' | 'fieldMapping' | 'profile' | 'storeManagement' | 'accountSettings' | 'editProfile' | 'helpSupport' | 'changeAccount' | 'login' | 'onboarding' | 'addIngredient' | 'addMyItem' | 'addNewMyItemEntry' | 'syncHistory' | 'backupRestore' | 'collections' | 'cookbookLibrary';
 
 export interface GlobalTimerState {
   remainingSeconds: number;
@@ -136,6 +137,37 @@ const App: React.FC = () => {
   const [likedRecipeIds, setLikedRecipeIds] = useState<string[]>(() => {
     try { const s = localStorage.getItem('mise_liked'); return s ? JSON.parse(s) : []; } catch { return []; }
   });
+
+  const [cookbooks, setCookbooks] = useState<{id:string;title:string;author:string;theme:string}[]>([]);
+
+  // Load cookbook library from Tab D of mise-lifestyle-suite
+  useEffect(() => {
+    if (!isAuthenticated || !isProfileComplete) return;
+    fetch('/api/claude', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'sheetWrite',
+        sheetWrite: {
+          method: 'GET',
+          url: 'https://sheets.googleapis.com/v4/spreadsheets/1s-4nnEQ6RZHs5LLoM8yz4nS_x-tsAOMFY0ilVcdBzo4/values/Tab%20D%20%E2%80%94%20Cookbook%20Index!A:D?key=AIzaSyDFc2raCSZfnfyM5n1fwrsbUco1njqHHMk',
+          body: null,
+        },
+      }),
+    })
+    .then(r => r.json())
+    .then(data => {
+      const rows: string[][] = data.values ?? [];
+      const books = rows.slice(1).map(r => ({
+        id: r[0] ?? '',
+        title: r[1] ?? '',
+        author: r[2] ?? '',
+        theme: r[3] ?? '',
+      })).filter(b => b.id && b.title);
+      setCookbooks(books);
+    })
+    .catch(e => console.error('cookbooks load error:', e));
+  }, [isAuthenticated, isProfileComplete]);
 
   const [isAddOverlayOpen, setIsAddOverlayOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -507,7 +539,7 @@ const App: React.FC = () => {
 
     if (currentView === 'login') return <Login />;
     if (currentView === 'onboarding') return <OnboardingProfile />;
-    if (currentView === 'profile') return <Profile user={{ name: userName || 'Chef', bio: userBio || 'Ready to Cook', avatarUrl: userAvatar }} onBack={handleBack} onSettings={() => navigateTo('settings')} onManageStores={() => navigateTo('storeManagement')} onLogout={logout} onAccountSettings={() => navigateTo('accountSettings')} onEditProfile={() => navigateTo('editProfile')} onHelpSupport={() => navigateTo('helpSupport')} />;
+    if (currentView === 'profile') return <Profile user={{ name: userName || 'Chef', bio: userBio || 'Ready to Cook', avatarUrl: userAvatar }} onBack={handleBack} onSettings={() => navigateTo('settings')} onManageStores={() => navigateTo('storeManagement')} onLogout={logout} onAccountSettings={() => navigateTo('accountSettings')} onEditProfile={() => navigateTo('editProfile')} onHelpSupport={() => navigateTo('helpSupport')} onLibrary={() => navigateTo('cookbookLibrary')} />;
     if (currentView === 'settings') return <SyncSettings currentAccount={userEmail || ''} onBack={handleBack} onSync={() => triggerSync()} isSyncing={isAutoSyncing} onMapFields={() => navigateTo('fieldMapping')} onOpenHistory={() => navigateTo('syncHistory')} onOpenBackup={() => navigateTo('backupRestore')} onChangeAccount={() => navigateTo('changeAccount')} />;
     if (currentView === 'storeManagement') return <StoreManagement mappings={mappings} onBack={handleBack} selectedStore={selectedStore} onStoreSelect={setSelectedStore} onSetDefault={(s) => { setSelectedStore(s); localStorage.setItem('mise_default_store', s); }} onOpenMap={() => showToast('Store mapping coming soon')} />;
     if (currentView === 'accountSettings') return <AccountSettings onBack={handleBack} onLogout={logout} />;
@@ -533,7 +565,10 @@ const App: React.FC = () => {
     if (currentView === 'config') return <PrecisionConfig masters={masterIngredients} pantry={pantry} mappings={mappings} selectedStore={selectedStore} onStoreChange={setSelectedStore} onUpdateMappings={setMappings} onBack={handleBack} />;
     if (currentView === 'fieldMapping') return <FieldMapping onBack={handleBack} onConfirm={(count) => { showToast(`Synced ${count} recipes`); handleBack(); }} />;
 
+    if (currentView === 'cookbookLibrary') return <CookbookLibrary books={cookbooks} onBack={handleBack} />;
+
     if (currentView === 'collections') return <Collections
+      onLibrary={() => navigateTo('cookbookLibrary')}
       recipes={recipesList}
       onBack={handleBack}
       onRecipeSelect={(r) => { setSelectedRecipe(r); navigateTo('recipeDetail'); }}
@@ -701,6 +736,10 @@ const App: React.FC = () => {
       onCollectionsOpen={() => {
         if (mainRef.current) recipesScrollRef.current = mainRef.current.scrollTop;
         navigateTo('collections');
+      }}
+      onLibraryOpen={() => {
+        if (mainRef.current) recipesScrollRef.current = mainRef.current.scrollTop;
+        navigateTo('cookbookLibrary');
       }}
       recentCount={recentCookedCount}
     />;
